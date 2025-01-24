@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Técnicos{% endblock %}
+{% block content %}
+    <h2>Técnicos</h2>
+    
+    <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#addTecnicoModal">
+        Add New Técnico
+    </button>
+
+    <table class="table table-striped" id="tecnicoTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Área</th>
+                <th>Inserciones</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="modal fade" id="addTecnicoModal">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Técnico</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="tecnicoForm">
+                        <div class="mb-3">
+                            <input type="text" class="form-control" name="nombre" placeholder="Nombre" required>
+                        </div>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" name="area" placeholder="Área" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="addTecnico()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function loadTecnicos() {
+            $.get('/get_tecnicos', function(tecnicos) {
+                const tbody = $('#tecnicoTable tbody');
+                tbody.empty();
+                tecnicos.forEach(tec => {
+                    tbody.append(`
+                        <tr>
+                            <td>${tec.id}</td>
+                            <td>${tec.nombre}</td>
+                            <td>${tec.area}</td>
+                            <td>${tec.inserciones}</td>
+                        </tr>
+                    `);
+                });
+            });
+        }
+
+        function addTecnico() {
+            const formData = {
+                nombre: $('input[name="nombre"]').val(),
+                area: $('input[name="area"]').val()
+            };
+
+            $.ajax({
+                url: '/add_tecnico',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(formData),
+                success: function() {
+                    $('#addTecnicoModal').modal('hide');
+                    document.getElementById('tecnicoForm').reset();
+                    loadTecnicos();
+                },
+                error: function(xhr) {
+                    alert('Error: ' + JSON.parse(xhr.responseText).error);
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            loadTecnicos();
+            socket.on('update', loadTecnicos);
+        });
+    </script>
+{% endblock %}
