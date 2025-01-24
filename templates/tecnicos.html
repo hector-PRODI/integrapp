@@ -1,44 +1,53 @@
 {% extends "base.html" %}
-{% block title %}Técnicos{% endblock %}
+{% block title %}Gestión de Entidades{% endblock %}
 {% block content %}
-    <h2>Técnicos</h2>
+    <h2 class="mb-4">Gestión de Entidades</h2>
     
     <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#addTecnicoModal">
-        Add New Técnico
+        <i class="bi bi-plus-circle"></i> Nueva Entidad
     </button>
 
-    <table class="table table-striped" id="tecnicoTable">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Nombre</th>
-                <th>Área</th>
-                <th>Inserciones</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover" id="tecnicoTable">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Área</th>
+                    <th>Inserciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
 
+    <!-- Add Tecnico Modal -->
     <div class="modal fade" id="addTecnicoModal">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New Técnico</h5>
+                    <h5 class="modal-title">Nueva Entidad</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="tecnicoForm">
                         <div class="mb-3">
-                            <input type="text" class="form-control" name="nombre" placeholder="Nombre" required>
+                            <input type="text" class="form-control" 
+                                   name="nombre" 
+                                   placeholder="Nombre de la entidad"
+                                   required>
                         </div>
                         <div class="mb-3">
-                            <input type="text" class="form-control" name="area" placeholder="Área" required>
+                            <input type="text" class="form-control" 
+                                   name="area" 
+                                   placeholder="Área de actuación"
+                                   required>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" class="btn btn-primary" onclick="addTecnico()">Save</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="button" class="btn btn-primary" onclick="addTecnico()">Guardar</button>
                 </div>
             </div>
         </div>
@@ -83,10 +92,10 @@
                 success: function() {
                     $('#addTecnicoModal').modal('hide');
                     document.getElementById('tecnicoForm').reset();
-                    loadTecnicos();
                 },
                 error: function(xhr) {
-                    alert('Error: ' + JSON.parse(xhr.responseText).error);
+                    const error = JSON.parse(xhr.responseText).error;
+                    alert('Error: ' + error);
                 }
             });
         }
