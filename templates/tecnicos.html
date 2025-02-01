@@ -1,108 +1,101 @@
 {% extends "base.html" %}
-{% block title %}Gestión de Entidades{% endblock %}
+{% block title %}Técnicos{% endblock %}
 {% block content %}
-    <h2 class="mb-4">Gestión de Entidades</h2>
-    
-    <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#addTecnicoModal">
-        <i class="bi bi-plus-circle"></i> Nueva Entidad
-    </button>
+<div class="d-flex justify-content-between mb-3">
+  <h1>Técnicos</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addTecnicoModal">
+    <i class="bi bi-plus"></i> Add Técnico
+  </button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Área</th>
+        <th>Inserciones</th>
+      </tr>
+    </thead>
+    <tbody id="tecnicosTableBody"></tbody>
+  </table>
+</div>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover" id="tecnicoTable">
-            <thead class="table-dark">
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Área</th>
-                    <th>Inserciones</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <!-- Add Tecnico Modal -->
-    <div class="modal fade" id="addTecnicoModal">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Nueva Entidad</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="tecnicoForm">
-                        <div class="mb-3">
-                            <input type="text" class="form-control" 
-                                   name="nombre" 
-                                   placeholder="Nombre de la entidad"
-                                   required>
-                        </div>
-                        <div class="mb-3">
-                            <input type="text" class="form-control" 
-                                   name="area" 
-                                   placeholder="Área de actuación"
-                                   required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" onclick="addTecnico()">Guardar</button>
-                </div>
-            </div>
+<!-- Add Técnico Modal -->
+<div class="modal fade" id="addTecnicoModal" tabindex="-1" aria-labelledby="addTecnicoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addTecnicoForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addTecnicoModalLabel">Add Técnico</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="nombre" class="form-label">Nombre</label>
+            <input type="text" class="form-control" id="nombre" name="nombre" required>
+          </div>
+          <div class="mb-3">
+            <label for="area" class="form-label">Área</label>
+            <input type="text" class="form-control" id="area" name="area" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Técnico</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
     </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const socket = io();
-
-        function loadTecnicos() {
-            $.get('/get_tecnicos', function(tecnicos) {
-                const tbody = $('#tecnicoTable tbody');
-                tbody.empty();
-                tecnicos.forEach(tec => {
-                    tbody.append(`
-                        <tr>
-                            <td>${tec.id}</td>
-                            <td>${tec.nombre}</td>
-                            <td>${tec.area}</td>
-                            <td>${tec.inserciones}</td>
-                        </tr>
-                    `);
-                });
-            });
-        }
-
-        function addTecnico() {
-            const formData = {
-                nombre: $('input[name="nombre"]').val(),
-                area: $('input[name="area"]').val()
-            };
-
-            $.ajax({
-                url: '/add_tecnico',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(formData),
-                success: function() {
-                    $('#addTecnicoModal').modal('hide');
-                    document.getElementById('tecnicoForm').reset();
-                },
-                error: function(xhr) {
-                    const error = JSON.parse(xhr.responseText).error;
-                    alert('Error: ' + error);
-                }
-            });
-        }
-
-        $(document).ready(function() {
-            loadTecnicos();
-            socket.on('update', loadTecnicos);
+{{ super() }}
+<script>
+  function loadTecnicos() {
+    $.ajax({
+      url: '/get_tecnicos',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(t) {
+          rows += `<tr>
+                    <td>${t.id}</td>
+                    <td>${t.nombre}</td>
+                    <td>${t.area}</td>
+                    <td>${t.inserciones}</td>
+                   </tr>`;
         });
-    </script>
+        $('#tecnicosTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading técnicos');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadTecnicos();
+    $('#addTecnicoForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        nombre: $('#nombre').val(),
+        area: $('#area').val()
+      };
+      $.ajax({
+        url: '/add_tecnico',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addTecnicoModal').modal('hide');
+          loadTecnicos();
+        },
+        error: function(err) {
+          alert('Error adding técnico');
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

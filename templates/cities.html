@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Cities{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Cities</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCityModal"><i class="bi bi-plus"></i> Add City</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>City ID</th>
+        <th>City</th>
+        <th>Province ID</th>
+      </tr>
+    </thead>
+    <tbody id="citiesTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add City Modal -->
+<div class="modal fade" id="addCityModal" tabindex="-1" aria-labelledby="addCityModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addCityForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addCityModalLabel">Add City</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="city_id" class="form-label">City ID</label>
+            <input type="number" class="form-control" id="city_id" name="city_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="city" class="form-label">City</label>
+            <input type="text" class="form-control" id="city" name="city" required>
+          </div>
+          <div class="mb-3">
+            <label for="province_id" class="form-label">Province ID</label>
+            <input type="number" class="form-control" id="province_id" name="province_id" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add City</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadCities() {
+    $.ajax({
+      url: '/get_cities',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(city) {
+          rows += `<tr>
+                    <td>${city.city_id}</td>
+                    <td>${city.city}</td>
+                    <td>${city.province_id}</td>
+                   </tr>`;
+        });
+        $('#citiesTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading cities');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadCities();
+    $('#addCityForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        city_id: $('#city_id').val(),
+        city: $('#city').val(),
+        province_id: $('#province_id').val()
+      };
+      $.ajax({
+        url: '/add_city',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addCityModal').modal('hide');
+          loadCities();
+        },
+        error: function(err) {
+          alert('Error adding city');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

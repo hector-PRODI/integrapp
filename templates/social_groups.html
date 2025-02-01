@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Social Groups{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Social Groups</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addSocialGroupModal"><i class="bi bi-plus"></i> Add Social Group</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Social Group ID</th>
+        <th>Group Name</th>
+      </tr>
+    </thead>
+    <tbody id="socialGroupsTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add Social Group Modal -->
+<div class="modal fade" id="addSocialGroupModal" tabindex="-1" aria-labelledby="addSocialGroupModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addSocialGroupForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addSocialGroupModalLabel">Add Social Group</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="social_group_id" class="form-label">Social Group ID</label>
+            <input type="number" class="form-control" id="social_group_id" name="social_group_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="group_name" class="form-label">Group Name</label>
+            <input type="text" class="form-control" id="group_name" name="group_name" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Social Group</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadSocialGroups() {
+    $.ajax({
+      url: '/get_social_groups',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(group) {
+          rows += `<tr>
+                    <td>${group.social_group_id}</td>
+                    <td>${group.group_name}</td>
+                   </tr>`;
+        });
+        $('#socialGroupsTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading social groups');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadSocialGroups();
+    $('#addSocialGroupForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        social_group_id: $('#social_group_id').val(),
+        group_name: $('#group_name').val()
+      };
+      $.ajax({
+        url: '/add_social_group',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addSocialGroupModal').modal('hide');
+          loadSocialGroups();
+        },
+        error: function(err) {
+          alert('Error adding social group');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}ID Documents{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>ID Documents</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addIdDocModal"><i class="bi bi-plus"></i> Add ID Doc</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Doc Type ID</th>
+        <th>Doc Name</th>
+        <th>Doc Template</th>
+      </tr>
+    </thead>
+    <tbody id="idDocsTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add ID Doc Modal -->
+<div class="modal fade" id="addIdDocModal" tabindex="-1" aria-labelledby="addIdDocModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addIdDocForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addIdDocModalLabel">Add ID Document</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="doc_type_id" class="form-label">Doc Type ID</label>
+            <input type="number" class="form-control" id="doc_type_id" name="doc_type_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="doc_name" class="form-label">Doc Name</label>
+            <input type="text" class="form-control" id="doc_name" name="doc_name" required>
+          </div>
+          <div class="mb-3">
+            <label for="doc_template" class="form-label">Doc Template</label>
+            <input type="text" class="form-control" id="doc_template" name="doc_template" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add ID Doc</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadIdDocs() {
+    $.ajax({
+      url: '/get_id_docs',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(doc) {
+          rows += `<tr>
+                    <td>${doc.doc_type_id}</td>
+                    <td>${doc.doc_name}</td>
+                    <td>${doc.doc_template}</td>
+                   </tr>`;
+        });
+        $('#idDocsTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading ID docs');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadIdDocs();
+    $('#addIdDocForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        doc_type_id: $('#doc_type_id').val(),
+        doc_name: $('#doc_name').val(),
+        doc_template: $('#doc_template').val()
+      };
+      $.ajax({
+        url: '/add_id_doc',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addIdDocModal').modal('hide');
+          loadIdDocs();
+        },
+        error: function(err) {
+          alert('Error adding ID doc');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

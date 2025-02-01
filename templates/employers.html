@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Employers{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Employers</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEmployerModal"><i class="bi bi-plus"></i> Add Employer</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Employer ID</th>
+        <th>Name</th>
+        <th>Last Name</th>
+        <th>Second Last Name</th>
+        <th>Phone</th>
+        <th>Mobile</th>
+        <th>Personal Email</th>
+        <th>Entity Email</th>
+        <th>Username</th>
+        <th>Active</th>
+        <th>Last Update</th>
+        <th>Department ID</th>
+      </tr>
+    </thead>
+    <tbody id="employersTableBody">
+      <!-- Data loaded via AJAX -->
+    </tbody>
+  </table>
+</div>
+
+<!-- Add Employer Modal -->
+<div class="modal fade" id="addEmployerModal" tabindex="-1" aria-labelledby="addEmployerModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addEmployerForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addEmployerModalLabel">Add Employer</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Employer Form Fields -->
+          <div class="mb-3">
+            <label for="employer_id" class="form-label">Employer ID</label>
+            <input type="number" class="form-control" id="employer_id" name="employer_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="name" class="form-label">Name</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label for="last_name" class="form-label">Last Name</label>
+            <input type="text" class="form-control" id="last_name" name="last_name" required>
+          </div>
+          <div class="mb-3">
+            <label for="second_last_name" class="form-label">Second Last Name</label>
+            <input type="text" class="form-control" id="second_last_name" name="second_last_name">
+          </div>
+          <div class="mb-3">
+            <label for="phone_number" class="form-label">Phone Number</label>
+            <input type="number" class="form-control" id="phone_number" name="phone_number" required>
+          </div>
+          <div class="mb-3">
+            <label for="mobile_number" class="form-label">Mobile Number</label>
+            <input type="number" class="form-control" id="mobile_number" name="mobile_number" required>
+          </div>
+          <div class="mb-3">
+            <label for="personal_email" class="form-label">Personal Email</label>
+            <input type="email" class="form-control" id="personal_email" name="personal_email">
+          </div>
+          <div class="mb-3">
+            <label for="entity_email" class="form-label">Entity Email</label>
+            <input type="email" class="form-control" id="entity_email" name="entity_email">
+          </div>
+          <div class="mb-3">
+            <label for="address_id" class="form-label">Address ID</label>
+            <input type="number" class="form-control" id="address_id" name="address_id">
+          </div>
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username" name="username">
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password" name="password">
+          </div>
+          <div class="mb-3">
+            <label for="active" class="form-label">Active</label>
+            <select class="form-select" id="active" name="active">
+              <option value="true" selected>True</option>
+              <option value="false">False</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="last_update" class="form-label">Last Update</label>
+            <input type="datetime-local" class="form-control" id="last_update" name="last_update">
+          </div>
+          <div class="mb-3">
+            <label for="department_id" class="form-label">Department ID</label>
+            <input type="number" class="form-control" id="department_id" name="department_id">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Employer</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadEmployers() {
+    $.ajax({
+      url: '/get_employers',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(emp) {
+          rows += `<tr>
+                    <td>${emp.employer_id}</td>
+                    <td>${emp.name}</td>
+                    <td>${emp.last_name}</td>
+                    <td>${emp.second_last_name || ''}</td>
+                    <td>${emp.phone_number}</td>
+                    <td>${emp.mobile_number}</td>
+                    <td>${emp.personal_email || ''}</td>
+                    <td>${emp.entity_email || ''}</td>
+                    <td>${emp.username || ''}</td>
+                    <td>${emp.active}</td>
+                    <td>${emp.last_update || ''}</td>
+                    <td>${emp.department_id || ''}</td>
+                  </tr>`;
+        });
+        $('#employersTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading employers');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadEmployers();
+    $('#addEmployerForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        employer_id: $('#employer_id').val(),
+        name: $('#name').val(),
+        last_name: $('#last_name').val(),
+        second_last_name: $('#second_last_name').val(),
+        phone_number: $('#phone_number').val(),
+        mobile_number: $('#mobile_number').val(),
+        personal_email: $('#personal_email').val(),
+        entity_email: $('#entity_email').val(),
+        address_id: $('#address_id').val(),
+        username: $('#username').val(),
+        password: $('#password').val(),
+        active: $('#active').val() === 'true',
+        last_update: $('#last_update').val(),
+        department_id: $('#department_id').val()
+      };
+
+      $.ajax({
+        url: '/add_employer',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addEmployerModal').modal('hide');
+          loadEmployers();
+        },
+        error: function(err) {
+          alert('Error adding employer');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

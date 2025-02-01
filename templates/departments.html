@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Departments{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Departments</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDepartmentModal"><i class="bi bi-plus"></i> Add Department</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Department ID</th>
+        <th>Name</th>
+        <th>Entity ID</th>
+      </tr>
+    </thead>
+    <tbody id="departmentsTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add Department Modal -->
+<div class="modal fade" id="addDepartmentModal" tabindex="-1" aria-labelledby="addDepartmentModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addDepartmentForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addDepartmentModalLabel">Add Department</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="department_id" class="form-label">Department ID</label>
+            <input type="number" class="form-control" id="department_id" name="department_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="name" class="form-label">Name</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+          <div class="mb-3">
+            <label for="entity_id" class="form-label">Entity ID</label>
+            <input type="number" class="form-control" id="entity_id" name="entity_id" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Department</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadDepartments() {
+    $.ajax({
+      url: '/get_departments',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(dep) {
+          rows += `<tr>
+                    <td>${dep.department_id}</td>
+                    <td>${dep.name}</td>
+                    <td>${dep.entity_id}</td>
+                   </tr>`;
+        });
+        $('#departmentsTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading departments');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadDepartments();
+    $('#addDepartmentForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        department_id: $('#department_id').val(),
+        name: $('#name').val(),
+        entity_id: $('#entity_id').val()
+      };
+      $.ajax({
+        url: '/add_department',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addDepartmentModal').modal('hide');
+          loadDepartments();
+        },
+        error: function(err) {
+          alert('Error adding department');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

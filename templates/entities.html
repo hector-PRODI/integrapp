@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Entities{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Entities</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEntityModal"><i class="bi bi-plus"></i> Add Entity</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Entity ID</th>
+        <th>Name</th>
+      </tr>
+    </thead>
+    <tbody id="entitiesTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add Entity Modal -->
+<div class="modal fade" id="addEntityModal" tabindex="-1" aria-labelledby="addEntityModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addEntityForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addEntityModalLabel">Add Entity</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="entity_id" class="form-label">Entity ID</label>
+            <input type="number" class="form-control" id="entity_id" name="entity_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="name" class="form-label">Name</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Entity</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadEntities() {
+    $.ajax({
+      url: '/get_entities',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(ent) {
+          rows += `<tr>
+                    <td>${ent.entity_id}</td>
+                    <td>${ent.name}</td>
+                   </tr>`;
+        });
+        $('#entitiesTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading entities');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadEntities();
+    $('#addEntityForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        entity_id: $('#entity_id').val(),
+        name: $('#name').val()
+      };
+      $.ajax({
+        url: '/add_entity',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addEntityModal').modal('hide');
+          loadEntities();
+        },
+        error: function(err) {
+          alert('Error adding entity');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Provinces{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Provinces</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProvinceModal"><i class="bi bi-plus"></i> Add Province</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Province ID</th>
+        <th>Province</th>
+      </tr>
+    </thead>
+    <tbody id="provincesTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add Province Modal -->
+<div class="modal fade" id="addProvinceModal" tabindex="-1" aria-labelledby="addProvinceModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addProvinceForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addProvinceModalLabel">Add Province</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="province_id" class="form-label">Province ID</label>
+            <input type="number" class="form-control" id="province_id" name="province_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="province" class="form-label">Province</label>
+            <input type="text" class="form-control" id="province" name="province" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add Province</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadProvinces() {
+    $.ajax({
+      url: '/get_provinces',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(prov) {
+          rows += `<tr>
+                    <td>${prov.province_id}</td>
+                    <td>${prov.province}</td>
+                   </tr>`;
+        });
+        $('#provincesTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading provinces');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadProvinces();
+    $('#addProvinceForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        province_id: $('#province_id').val(),
+        province: $('#province').val()
+      };
+      $.ajax({
+        url: '/add_province',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addProvinceModal').modal('hide');
+          loadProvinces();
+        },
+        error: function(err) {
+          alert('Error adding province');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -1,205 +1,212 @@
 {% extends "base.html" %}
-{% block title %}Gestión de Usuarios{% endblock %}
+{% block title %}Usuarios{% endblock %}
 {% block content %}
-    <h2 class="mb-4">Gestión de Usuarios</h2>
-    
-    <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addUserModal">
-        <i class="bi bi-plus-circle"></i> Nuevo Usuario
-    </button>
+<div class="d-flex justify-content-between mb-3">
+  <h1>Usuarios</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="bi bi-plus"></i> Add User</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>DNI/NIE</th>
+        <th>Gesprodi</th>
+        <th>Nombre</th>
+        <th>Apellido1</th>
+        <th>Apellido2</th>
+        <th>Teléfono</th>
+        <th>Colectivo</th>
+        <th>Acciones</th>
+        <th>Incidencia</th>
+        <th>Entidad Asignada</th>
+        <th>Acceso Programa</th>
+        <th>Observaciones</th>
+      </tr>
+    </thead>
+    <tbody id="usersTableBody"></tbody>
+  </table>
+</div>
 
-    <div class="table-responsive">
-        <table class="table table-striped table-hover" id="userTable">
-            <thead class="table-dark">
-                <tr>
-                    <th>Nº</th>
-                    <th>DNI/NIE</th>
-                    <th>GESPRODI</th>
-                    <th>Nombre</th>
-                    <th>Apellido 1</th>
-                    <th>Apellido 2</th>
-                    <th>Teléfono</th>
-                    <th>Colectivo</th>
-                    <th>Acciones</th>
-                    <th>Incidencia</th>
-                    <th>Entidad</th>
-                    <th>Acceso</th>
-                    <th>Observaciones</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <!-- Add User Modal -->
-    <div class="modal fade" id="addUserModal">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Nuevo Usuario</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="userForm" class="row g-3">
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="dni_nie" 
-                                   placeholder="DNI/NIE" 
-                                   pattern="\d{8}[A-Za-z]" 
-                                   title="8 dígitos seguidos de una letra (ej: 12345678X)"
-                                   required>
-                        </div>
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="gesprodi" placeholder="GESPRODI">
-                        </div>
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="nombre" placeholder="Nombre" required>
-                        </div>
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="apellido1" placeholder="Apellido 1" required>
-                        </div>
-                        <div class="col-md-6">
-                            <input type="text" class="form-control" name="apellido2" placeholder="Apellido 2">
-                        </div>
-                        <div class="col-md-6">
-                            <input type="tel" class="form-control" name="telefono" placeholder="Teléfono" required>
-                        </div>
-                        <div class="col-md-6">
-                            <select class="form-select" name="colectivo" required>
-                                <option value="">Seleccione Colectivo</option>
-                                <option>Desemplead@</option>
-                                <option>Discapacidad</option>
-                                <option>Mayores</option>
-                                <option>Exclusión</option>
-                                <option>Inmigrantes</option>
-                                <option>Jóvenes sin experiencia laboral</option>
-                                <option>Mayores de 45</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <select class="form-select" name="acciones" required>
-                                <option value="">Seleccione Acción</option>
-                                <option>Espera</option>
-                                <option>Citada</option>
-                                <option>Atendida</option>
-                                <option>No interesa</option>
-                                <option>Ocupada</option>
-                                <option>No acude</option>
-                                <option>Derivada</option>
-                                <option>No contesta</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <select class="form-select" name="incidencia">
-                                <option value="">Seleccione Incidencia</option>
-                                <option>Error de conexión</option>
-                                <option>No hay información</option>
-                                <option>Baja administrativa</option>
-                                <option>Participante con otra entidad</option>
-                                <option>Error NIE</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <select class="form-select" name="entidad_asignada" required>
-                                <option value="">Entidad Asignada</option>
-                                <option>Prodiversa</option>
-                                <option>Mitad del cielo</option>
-                                <option>Acompanya</option>
-                                <option>Forprocer</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <select class="form-select" name="acceso_programa" required>
-                                <option value="">Acceso al Programa</option>
-                                <option>Sí</option>
-                                <option>No</option>
-                            </select>
-                        </div>
-                        <div class="col-12">
-                            <textarea class="form-control" name="observaciones" 
-                                      placeholder="Observaciones" rows="3"></textarea>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="button" class="btn btn-primary" onclick="addUser()">Guardar</button>
-                </div>
-            </div>
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form id="addUserForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addUserModalLabel">Add User</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
+        <div class="modal-body">
+          <!-- User Form Fields -->
+          <div class="row">
+            <div class="mb-3 col-md-4">
+              <label for="dni_nie" class="form-label">DNI/NIE</label>
+              <input type="text" class="form-control" id="dni_nie" name="dni_nie" required>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="gesprodi" class="form-label">Gesprodi</label>
+              <input type="text" class="form-control" id="gesprodi" name="gesprodi">
+            </div>
+          </div>
+          <div class="row">
+            <div class="mb-3 col-md-4">
+              <label for="nombre" class="form-label">Nombre</label>
+              <input type="text" class="form-control" id="nombre" name="nombre" required>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="apellido1" class="form-label">Apellido1</label>
+              <input type="text" class="form-control" id="apellido1" name="apellido1" required>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="apellido2" class="form-label">Apellido2</label>
+              <input type="text" class="form-control" id="apellido2" name="apellido2">
+            </div>
+          </div>
+          <div class="row">
+            <div class="mb-3 col-md-4">
+              <label for="telefono" class="form-label">Teléfono</label>
+              <input type="text" class="form-control" id="telefono" name="telefono" required>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="colectivo" class="form-label">Colectivo</label>
+              <select class="form-select" id="colectivo" name="colectivo" required>
+                <option value="">Select...</option>
+                <option value="Desemplead@">Desemplead@</option>
+                <option value="Discapacidad">Discapacidad</option>
+                <option value="Mayores">Mayores</option>
+                <option value="Exclusión">Exclusión</option>
+                <option value="Inmigrantes">Inmigrantes</option>
+                <option value="Jóvenes sin experiencia laboral">Jóvenes sin experiencia laboral</option>
+                <option value="Mayores de 45">Mayores de 45</option>
+              </select>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="acciones" class="form-label">Acciones</label>
+              <select class="form-select" id="acciones" name="acciones" required>
+                <option value="">Select...</option>
+                <option value="Espera">Espera</option>
+                <option value="Citada">Citada</option>
+                <option value="Atendida">Atendida</option>
+                <option value="No interesa">No interesa</option>
+                <option value="Ocupada">Ocupada</option>
+                <option value="No acude">No acude</option>
+                <option value="Derivada">Derivada</option>
+                <option value="No contesta">No contesta</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="mb-3 col-md-4">
+              <label for="incidencia" class="form-label">Incidencia</label>
+              <select class="form-select" id="incidencia" name="incidencia">
+                <option value="">Select...</option>
+                <option value="Error de conexión">Error de conexión</option>
+                <option value="No hay información">No hay información</option>
+                <option value="Baja administrativa">Baja administrativa</option>
+                <option value="Participante con otra entidad">Participante con otra entidad</option>
+                <option value="Error NIE">Error NIE</option>
+              </select>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="entidad_asignada" class="form-label">Entidad Asignada</label>
+              <select class="form-select" id="entidad_asignada" name="entidad_asignada" required>
+                <option value="">Select...</option>
+                <option value="Prodiversa">Prodiversa</option>
+                <option value="Mitad del cielo">Mitad del cielo</option>
+                <option value="Acompanya">Acompanya</option>
+                <option value="Forprocer">Forprocer</option>
+              </select>
+            </div>
+            <div class="mb-3 col-md-4">
+              <label for="acceso_programa" class="form-label">Acceso Programa</label>
+              <select class="form-select" id="acceso_programa" name="acceso_programa" required>
+                <option value="">Select...</option>
+                <option value="Sí">Sí</option>
+                <option value="No">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label for="observaciones" class="form-label">Observaciones</label>
+            <textarea class="form-control" id="observaciones" name="observaciones"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add User</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
     </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script>
-        const socket = io();
-        
-        function loadTableData(users) {
-            const tbody = $('#userTable tbody');
-            tbody.empty();
-            users.forEach(user => {
-                tbody.append(`
-                    <tr>
-                        <td>${user.id}</td>
-                        <td>${user.dni_nie}</td>
-                        <td>${user.gesprodi || ''}</td>
-                        <td>${user.nombre}</td>
-                        <td>${user.apellido1}</td>
-                        <td>${user.apellido2 || ''}</td>
-                        <td>${user.telefono}</td>
-                        <td>${user.colectivo}</td>
-                        <td>${user.acciones}</td>
-                        <td>${user.incidencia || ''}</td>
-                        <td>${user.entidad_asignada}</td>
-                        <td>${user.acceso_programa}</td>
-                        <td>${user.observaciones || ''}</td>
-                    </tr>
-                `);
-            });
-        }
-
-        function updateTable() {
-            $.get('/get_users', function(users) {
-                loadTableData(users);
-            });
-        }
-
-        function addUser() {
-            const formData = {
-                dni_nie: $('input[name="dni_nie"]').val(),
-                gesprodi: $('input[name="gesprodi"]').val(),
-                nombre: $('input[name="nombre"]').val(),
-                apellido1: $('input[name="apellido1"]').val(),
-                apellido2: $('input[name="apellido2"]').val(),
-                telefono: $('input[name="telefono"]').val(),
-                colectivo: $('select[name="colectivo"]').val(),
-                acciones: $('select[name="acciones"]').val(),
-                incidencia: $('select[name="incidencia"]').val(),
-                entidad_asignada: $('select[name="entidad_asignada"]').val(),
-                acceso_programa: $('select[name="acceso_programa"]').val(),
-                observaciones: $('textarea[name="observaciones"]').val()
-            };
-
-            $.ajax({
-                url: '/add_user',
-                type: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(formData),
-                success: function() {
-                    $('#addUserModal').modal('hide');
-                    document.getElementById('userForm').reset();
-                },
-                error: function(xhr) {
-                    const error = JSON.parse(xhr.responseText).error;
-                    alert('Error: ' + error);
-                }
-            });
-        }
-
-        $(document).ready(function() {
-            updateTable();
-            socket.on('update', updateTable);
+{{ super() }}
+<script>
+  function loadUsers() {
+    $.ajax({
+      url: '/get_users',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(user) {
+          rows += `<tr>
+                    <td>${user.id}</td>
+                    <td>${user.dni_nie}</td>
+                    <td>${user.gesprodi || ''}</td>
+                    <td>${user.nombre}</td>
+                    <td>${user.apellido1}</td>
+                    <td>${user.apellido2 || ''}</td>
+                    <td>${user.telefono}</td>
+                    <td>${user.colectivo}</td>
+                    <td>${user.acciones}</td>
+                    <td>${user.incidencia || ''}</td>
+                    <td>${user.entidad_asignada}</td>
+                    <td>${user.acceso_programa}</td>
+                    <td>${user.observaciones || ''}</td>
+                   </tr>`;
         });
-    </script>
+        $('#usersTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading users');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadUsers();
+    $('#addUserForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        dni_nie: $('#dni_nie').val(),
+        gesprodi: $('#gesprodi').val(),
+        nombre: $('#nombre').val(),
+        apellido1: $('#apellido1').val(),
+        apellido2: $('#apellido2').val(),
+        telefono: $('#telefono').val(),
+        colectivo: $('#colectivo').val(),
+        acciones: $('#acciones').val(),
+        incidencia: $('#incidencia').val(),
+        entidad_asignada: $('#entidad_asignada').val(),
+        acceso_programa: $('#acceso_programa').val(),
+        observaciones: $('#observaciones').val()
+      };
+      $.ajax({
+        url: '/add_user',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addUserModal').modal('hide');
+          loadUsers();
+        },
+        error: function(err) {
+          alert('Error adding user');
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

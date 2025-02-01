@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Panel de Control{% endblock %}
+
+{% block content %}
+<div class="container">
+  <h1 class="mt-4">Panel de Control</h1>
+  <p class="lead">Seleccione una de las siguientes páginas para visualizar o gestionar los datos:</p>
+  <div class="list-group">
+    <a href="/usuarios" class="list-group-item list-group-item-action">
+      <i class="bi bi-person-lines-fill"></i> Usuarios
+    </a>
+    <a href="/tecnicos" class="list-group-item list-group-item-action">
+      <i class="bi bi-person-badge"></i> Técnicos
+    </a>
+    <a href="/employers" class="list-group-item list-group-item-action">
+      <i class="bi bi-person-workspace"></i> Empleadores
+    </a>
+    <a href="/addresses" class="list-group-item list-group-item-action">
+      <i class="bi bi-geo-alt"></i> Direcciones
+    </a>
+    <a href="/cities" class="list-group-item list-group-item-action">
+      <i class="bi bi-building"></i> Ciudades
+    </a>
+    <a href="/provinces" class="list-group-item list-group-item-action">
+      <i class="bi bi-globe"></i> Provincias
+    </a>
+    <a href="/entities" class="list-group-item list-group-item-action">
+      <i class="bi bi-building"></i> Entidades
+    </a>
+    <a href="/departments" class="list-group-item list-group-item-action">
+      <i class="bi bi-diagram-3"></i> Departamentos
+    </a>
+    <a href="/new_users" class="list-group-item list-group-item-action">
+      <i class="bi bi-people"></i> Nuevos Usuarios
+    </a>
+    <a href="/id_docs" class="list-group-item list-group-item-action">
+      <i class="bi bi-file-earmark-text"></i> Documentos de Identificación
+    </a>
+    <a href="/social_groups" class="list-group-item list-group-item-action">
+      <i class="bi bi-people"></i> Grupos Sociales
+    </a>
+    <a href="/user_info" class="list-group-item list-group-item-action">
+      <i class="bi bi-info-circle"></i> Información de Usuarios
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Users Info{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between mb-3">
+  <h1>Users Info</h1>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserInfoModal"><i class="bi bi-plus"></i> Add User Info</button>
+</div>
+<div class="table-responsive">
+  <table class="table table-hover">
+    <thead>
+      <tr>
+        <th>Users Info ID</th>
+        <th>Technician Observations</th>
+      </tr>
+    </thead>
+    <tbody id="userInfoTableBody"></tbody>
+  </table>
+</div>
+
+<!-- Add User Info Modal -->
+<div class="modal fade" id="addUserInfoModal" tabindex="-1" aria-labelledby="addUserInfoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="addUserInfoForm">
+        <div class="modal-header">
+          <h5 class="modal-title" id="addUserInfoModalLabel">Add User Info</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="users_info_id" class="form-label">Users Info ID</label>
+            <input type="number" class="form-control" id="users_info_id" name="users_info_id" required>
+          </div>
+          <div class="mb-3">
+            <label for="technician_observ" class="form-label">Technician Observations</label>
+            <textarea class="form-control" id="technician_observ" name="technician_observ"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Add User Info</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  function loadUserInfo() {
+    $.ajax({
+      url: '/get_user_info',
+      method: 'GET',
+      success: function(data) {
+        let rows = '';
+        data.forEach(function(info) {
+          rows += `<tr>
+                    <td>${info.users_info_id}</td>
+                    <td>${info.technician_observ || ''}</td>
+                   </tr>`;
+        });
+        $('#userInfoTableBody').html(rows);
+      },
+      error: function(err) {
+        alert('Error loading user info');
+      }
+    });
+  }
+  $(document).ready(function() {
+    loadUserInfo();
+    $('#addUserInfoForm').submit(function(e) {
+      e.preventDefault();
+      const formData = {
+        users_info_id: $('#users_info_id').val(),
+        technician_observ: $('#technician_observ').val()
+      };
+      $.ajax({
+        url: '/add_user_info',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(formData),
+        success: function(response) {
+          $('#addUserInfoModal').modal('hide');
+          loadUserInfo();
+        },
+        error: function(err) {
+          alert('Error adding user info');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}
