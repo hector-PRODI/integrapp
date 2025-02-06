@@ -1,136 +1,182 @@
 {% extends "base.html" %}
 {% block title %}New Users{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
-  <h1>New Users</h1>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addNewUserModal"><i class="bi bi-plus"></i> Add New User</button>
+<div class="mb-3">
+  <h1>Nuevo Usuari@</h1>
 </div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form id="addNewUserForm">
+      <!-- Personal Information -->
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="doc_number" class="form-label">DNI / NIE</label>
+          <input type="text" class="form-control" id="doc_number" name="doc_number" required 
+                 pattern="^(\d{8}[A-Za-z]|[A-Za-z]\d{7}[A-Za-z])$" 
+                 title="Formato: 8 dígitos y letra (12345678A) o letra-7 dígitos-letra (X1234567Y)">
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="name" class="form-label">Nombre</label>
+          <input type="text" class="form-control" id="name" name="name" required>
+        </div>
+      </div>
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="last_name" class="form-label">Apellido</label>
+          <input type="text" class="form-control" id="last_name" name="last_name" required>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="second_last_name" class="form-label">Segundo Apellido</label>
+          <input type="text" class="form-control" id="second_last_name" name="second_last_name">
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="phone_number" class="form-label">Teléfono</label>
+          <input type="text" class="form-control" id="phone_number" name="phone_number" required>
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="mobile_number" class="form-label">Móvil</label>
+          <input type="text" class="form-control" id="mobile_number" name="mobile_number" required>
+        </div>
+      </div>
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" class="form-control" id="email" name="email" required>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="technician_id" class="form-label">Técnic@</label>
+          <select class="form-select" id="technician_id" name="technician_id">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="social_group_id" class="form-label">Grupo social</label>
+          <select class="form-select" id="social_group_id" name="social_group_id">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Address Information -->
+      <div class="row">
+        <div class="mb-3 col-md-6">
+          <label for="address" class="form-label">Dirección</label>
+          <input type="text" class="form-control" id="address" name="address">
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="postal_code" class="form-label">Código postal</label>
+          <input type="text" class="form-control" id="postal_code" name="postal_code" pattern="[0-9]{5}" title="El código postal debe tener 5 dígitos">
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="province_id" class="form-label">Provincia</label>
+          <select class="form-select" id="province_id" name="province_id">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="city_id" class="form-label">Ciudad</label>
+          <select class="form-select" id="city_id" name="city_id">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Additional Information -->
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="entity_id" class="form-label">Entidad</label>
+          <select class="form-select" id="entity_id" name="entity_id">
+            <option value="">Seleccionar...</option>
+          </select>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="actions" class="form-label">Acciones</label>
+          <select class="form-select" id="actions" name="actions" required>
+            <option value="">Seleccionar...</option>
+            <option value="Espera">Espera</option>
+            <option value="Citada">Citada</option>
+            <option value="Atendida">Atendida</option>
+            <option value="No interesa">No interesa</option>
+            <option value="Ocupada">Ocupada</option>
+            <option value="No acude">No acude</option>
+            <option value="Derivada">Derivada</option>
+            <option value="No contesta">No contesta</option>
+          </select>
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="incident" class="form-label">Incidencia</label>
+          <select class="form-select" id="incident" name="incident">
+            <option value="">Seleccionar...</option>
+            <option value="Error de conexión">Error de conexión</option>
+            <option value="No hay información">No hay información</option>
+            <option value="Baja administrativa">Baja administrativa</option>
+            <option value="Participante con otra entidad">Participante con otra entidad</option>
+            <option value="Error NIE">Error NIE</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Files -->
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="dni_file" class="form-label">DNI / NIF</label>
+          <input type="file" class="form-control" id="dni_file" name="dni_file" accept=".pdf,.doc,.docx">
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="cert_extr_file" class="form-label">Certificado extranjería</label>
+          <input type="file" class="form-control" id="cert_extr_file" name="cert_extr_file" accept=".pdf,.doc,.docx">
+        </div>
+        <div class="mb-3 col-md-4">
+          <label for="vida_laboral_file" class="form-label">Vida laboral</label>
+          <input type="file" class="form-control" id="vida_laboral_file" name="vida_laboral_file" accept=".pdf,.doc,.docx">
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="row">
+        <div class="mb-3 col-md-4">
+          <label for="create_date" class="form-label">Fecha de creación</label>
+          <input type="datetime-local" class="form-control" id="create_date" name="create_date">
+        </div>
+        <div class="mb-3 col-md-2">
+          <label for="active" class="form-label">¿Activo?</label>
+          <select class="form-select" id="active" name="active">
+            <option value="true" selected>Activo</option>
+            <option value="false">No activo</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="text-end">
+        <button type="submit" class="btn btn-primary">Crear Usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="table-responsive">
   <table class="table table-hover">
     <thead>
       <tr>
-        <th>User No</th>
-        <th>Doc Type ID</th>
-        <th>Doc Number</th>
-        <th>Name</th>
-        <th>Last Name</th>
-        <th>Second Last Name</th>
-        <th>Phone</th>
-        <th>Mobile</th>
-        <th>Email</th>
-        <th>Technician ID</th>
-        <th>Social Group ID</th>
-        <th>Address ID</th>
-        <th>Entity ID</th>
-        <th>Create Date</th>
-        <th>Active</th>
-        <th>Users Info ID</th>
+        <th>Fecha de creación</th>
+        <th>Nombre</th>
+        <th>Apellido</th>
+        <th>Entidad</th>
       </tr>
     </thead>
     <tbody id="newUsersTableBody"></tbody>
   </table>
 </div>
 
-<!-- Add New User Modal -->
-<div class="modal fade" id="addNewUserModal" tabindex="-1" aria-labelledby="addNewUserModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <form id="addNewUserForm">
-        <div class="modal-header">
-          <h5 class="modal-title" id="addNewUserModalLabel">Add New User</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <!-- New User Form Fields -->
-          <div class="row">
-            <div class="mb-3 col-md-2">
-              <label for="user_no" class="form-label">User No</label>
-              <input type="number" class="form-control" id="user_no" name="user_no" required>
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="doc_type_id" class="form-label">Doc Type ID</label>
-              <input type="number" class="form-control" id="doc_type_id" name="doc_type_id" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="doc_number" class="form-label">Doc Number</label>
-              <input type="text" class="form-control" id="doc_number" name="doc_number" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="name" class="form-label">Name</label>
-              <input type="text" class="form-control" id="name" name="name" required>
-            </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="last_name" class="form-label">Last Name</label>
-              <input type="text" class="form-control" id="last_name" name="last_name" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="second_last_name" class="form-label">Second Last Name</label>
-              <input type="text" class="form-control" id="second_last_name" name="second_last_name">
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="phone_number" class="form-label">Phone</label>
-              <input type="number" class="form-control" id="phone_number" name="phone_number" required>
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="mobile_number" class="form-label">Mobile</label>
-              <input type="number" class="form-control" id="mobile_number" name="mobile_number" required>
-            </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="email" class="form-label">Email</label>
-              <input type="email" class="form-control" id="email" name="email" required>
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="technician_id" class="form-label">Technician ID</label>
-              <input type="number" class="form-control" id="technician_id" name="technician_id">
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="social_group_id" class="form-label">Social Group ID</label>
-              <input type="number" class="form-control" id="social_group_id" name="social_group_id">
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="address_id" class="form-label">Address ID</label>
-              <input type="number" class="form-control" id="address_id" name="address_id">
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="entity_id" class="form-label">Entity ID</label>
-              <input type="number" class="form-control" id="entity_id" name="entity_id">
-            </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="create_date" class="form-label">Create Date</label>
-              <input type="datetime-local" class="form-control" id="create_date" name="create_date">
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="active" class="form-label">Active</label>
-              <select class="form-select" id="active" name="active">
-                <option value="true" selected>True</option>
-                <option value="false">False</option>
-              </select>
-            </div>
-            <div class="mb-3 col-md-2">
-              <label for="users_info_id" class="form-label">Users Info ID</label>
-              <input type="number" class="form-control" id="users_info_id" name="users_info_id">
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Add New User</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
+  // Store cities data globally
+  let allCities = [];
+
   function loadNewUsers() {
     $.ajax({
       url: '/get_new_users',
@@ -138,23 +184,21 @@
       success: function(data) {
         let rows = '';
         data.forEach(function(user) {
+          // Format the date
+          const date = new Date(user.create_date);
+          const formattedDate = date.toLocaleString('es-ES', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
           rows += `<tr>
-                    <td>${user.user_no}</td>
-                    <td>${user.doc_type_id}</td>
-                    <td>${user.doc_number}</td>
+                    <td>${formattedDate}</td>
                     <td>${user.name}</td>
                     <td>${user.last_name}</td>
-                    <td>${user.second_last_name || ''}</td>
-                    <td>${user.phone_number}</td>
-                    <td>${user.mobile_number}</td>
-                    <td>${user.email}</td>
-                    <td>${user.technician_id || ''}</td>
-                    <td>${user.social_group_id || ''}</td>
-                    <td>${user.address_id || ''}</td>
-                    <td>${user.entity_id || ''}</td>
-                    <td>${user.create_date || ''}</td>
-                    <td>${user.active}</td>
-                    <td>${user.users_info_id || ''}</td>
+                    <td>${user.entity || ''}</td>
                    </tr>`;
         });
         $('#newUsersTableBody').html(rows);
@@ -164,39 +208,166 @@
       }
     });
   }
+
+  function updateCitiesDropdown(provinceId) {
+    const citySelect = $('#city_id');
+    citySelect.empty().append('<option value="">Seleccionar...</option>');
+    
+    if (provinceId) {
+      // Filter cities by province
+      const citiesInProvince = allCities.filter(city => city.province_id === parseInt(provinceId));
+      
+      // Add filtered cities to dropdown
+      citiesInProvince.forEach(city => {
+        citySelect.append(`<option value="${city.id}">${city.name}</option>`);
+      });
+    }
+  }
+
+  function loadDropdowns() {
+    // Load technicians
+    $.ajax({
+      url: '/get_employers',
+      method: 'GET',
+      success: function(data) {
+        let options = '<option value="">Seleccionar...</option>';
+        data.forEach(function(tech) {
+          options += `<option value="${tech.id}">${tech.name}</option>`;
+        });
+        $('#technician_id').html(options);
+      }
+    });
+
+    // Load social groups
+    $.ajax({
+      url: '/get_social_groups_list',
+      method: 'GET',
+      success: function(data) {
+        let options = '<option value="">Seleccionar...</option>';
+        data.forEach(function(group) {
+          options += `<option value="${group.id}">${group.name}</option>`;
+        });
+        $('#social_group_id').html(options);
+      }
+    });
+
+    // Load entities
+    $.ajax({
+      url: '/get_entities_list',
+      method: 'GET',
+      success: function(data) {
+        let options = '<option value="">Seleccionar...</option>';
+        data.forEach(function(entity) {
+          options += `<option value="${entity.id}">${entity.name}</option>`;
+        });
+        $('#entity_id').html(options);
+      }
+    });
+
+    // Load provinces
+    $.ajax({
+      url: '/get_provinces_list',
+      method: 'GET',
+      success: function(data) {
+        let options = '<option value="">Seleccionar...</option>';
+        data.forEach(function(province) {
+          options += `<option value="${province.id}">${province.name}</option>`;
+        });
+        $('#province_id').html(options);
+      }
+    });
+
+    // Load all cities
+    $.ajax({
+      url: '/get_cities_list',
+      method: 'GET',
+      success: function(data) {
+        allCities = data; // Store cities data globally
+      }
+    });
+  }
+
+  // Socket.io connection and event handlers
+  const socket = io();
+  
+  socket.on('connect', function() {
+    console.log('Connected to WebSocket');
+  });
+
+  socket.on('update', function(data) {
+    console.log('Received update:', data);
+    if (data.message === 'new user added' && data.table === 'new_users' || data.message === 'user updated') {
+      loadNewUsers();
+    }
+  });
+
   $(document).ready(function() {
     loadNewUsers();
+    loadDropdowns();
+    
+    // Handle province selection
+    $('#province_id').change(function() {
+      const provinceId = $(this).val();
+      updateCitiesDropdown(provinceId);
+    });
+    
     $('#addNewUserForm').submit(function(e) {
       e.preventDefault();
-      const formData = {
-        user_no: $('#user_no').val(),
-        doc_type_id: $('#doc_type_id').val(),
-        doc_number: $('#doc_number').val(),
-        name: $('#name').val(),
-        last_name: $('#last_name').val(),
-        second_last_name: $('#second_last_name').val(),
-        phone_number: $('#phone_number').val(),
-        mobile_number: $('#mobile_number').val(),
-        email: $('#email').val(),
-        technician_id: $('#technician_id').val(),
-        social_group_id: $('#social_group_id').val(),
-        address_id: $('#address_id').val(),
-        entity_id: $('#entity_id').val(),
-        create_date: $('#create_date').val(),
-        active: $('#active').val() === 'true',
-        users_info_id: $('#users_info_id').val()
-      };
+      const formData = new FormData();
+      
+      // Add regular form fields
+      formData.append('doc_number', $('#doc_number').val());
+      formData.append('name', $('#name').val());
+      formData.append('last_name', $('#last_name').val());
+      formData.append('second_last_name', $('#second_last_name').val());
+      formData.append('phone_number', $('#phone_number').val());
+      formData.append('mobile_number', $('#mobile_number').val());
+      formData.append('email', $('#email').val());
+      formData.append('technician_id', $('#technician_id').val());
+      formData.append('social_group_id', $('#social_group_id').val());
+      formData.append('address', $('#address').val());
+      formData.append('postal_code', $('#postal_code').val());
+      formData.append('city_id', $('#city_id').val());
+      formData.append('entity_id', $('#entity_id').val());
+      formData.append('create_date', $('#create_date').val());
+      formData.append('active', $('#active').val() === 'true');
+      formData.append('actions', $('#actions').val());
+      formData.append('incident', $('#incident').val());
+
+      // Add files if they exist
+      const dniFile = $('#dni_file')[0].files[0];
+      const certExtrFile = $('#cert_extr_file')[0].files[0];
+      const vidaLaboralFile = $('#vida_laboral_file')[0].files[0];
+
+      if (dniFile) formData.append('dni_file', dniFile);
+      if (certExtrFile) formData.append('cert_extr_file', certExtrFile);
+      if (vidaLaboralFile) formData.append('vida_laboral_file', vidaLaboralFile);
+      
       $.ajax({
         url: '/add_new_user',
         method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(formData),
+        data: formData,
+        processData: false,
+        contentType: false,
         success: function(response) {
-          $('#addNewUserModal').modal('hide');
-          loadNewUsers();
+          $('#addNewUserForm')[0].reset();
+          // Reset city dropdown
+          updateCitiesDropdown('');
         },
-        error: function(err) {
-          alert('Error adding new user');
+        error: function(xhr, status, error) {
+          console.error('Error:', error);
+          console.error('Status:', status);
+          console.error('Response:', xhr.responseText);
+          let errorMessage = 'Error adding new user';
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (response.error) {
+              errorMessage = response.error;
+            }
+          } catch (e) {
+            console.error('Error parsing error response:', e);
+          }
+          alert(errorMessage);
         }
       });
     });

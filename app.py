@@ -5,12 +5,67 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import update, event
 import uuid
 import re
+import os
+import hashlib
+import traceback
 from datetime import datetime
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = 'bin'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def ensure_upload_folder():
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        os.makedirs(app.config['UPLOAD_FOLDER'])
+
+def generate_file_hash(file_data):
+    return hashlib.sha256(file_data).hexdigest()
+
+def save_file_with_hash(file):
+    print(f"Saving file: {file.filename}")  # Debug log
+    if file and allowed_file(file.filename):
+        try:
+            # Read file data and generate hash
+            try:
+                file_data = file.read()
+            except ValueError:
+                # If file has already been read, seek to beginning
+                file.seek(0)
+                file_data = file.read()
+            
+            file_hash = generate_file_hash(file_data)
+            print(f"Generated hash: {file_hash}")  # Debug log
+            
+            # Create filename with hash
+            filename = secure_filename(file.filename)
+            ext = filename.rsplit('.', 1)[1].lower()
+            new_filename = f"{file_hash}.{ext}"
+            print(f"New filename: {new_filename}")  # Debug log
+            
+            # Save file
+            ensure_upload_folder()
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            print(f"File path: {file_path}")  # Debug log
+            
+            # Seek to beginning of file before writing
+            file.seek(0)
+            file.save(file_path)
+            print("File saved successfully")  # Debug log
+            
+            return file_hash
+        except Exception as e:
+            print(f"Error in save_file_with_hash: {str(e)}")  # Debug log
+            traceback.print_exc()
+            raise
+    return None
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
@@ -89,8 +144,8 @@ class Employer(db.Model):
     name = db.Column(db.String)
     last_name = db.Column(db.String)
     second_last_name = db.Column(db.String)
-    phone_number = db.Column(db.SmallInteger)
-    mobile_number = db.Column(db.SmallInteger)
+    phone_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
+    mobile_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
     personal_email = db.Column(db.String)
     entity_email = db.Column(db.String)
     address_id = db.Column(db.BigInteger, db.ForeignKey('address.address_id'))
@@ -140,8 +195,8 @@ class UserNew(db.Model):
     name = db.Column(db.String)
     last_name = db.Column(db.String)
     second_last_name = db.Column(db.String)
-    phone_number = db.Column(db.SmallInteger)
-    mobile_number = db.Column(db.SmallInteger)
+    phone_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
+    mobile_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
     email = db.Column(db.String)
     technician_id = db.Column(db.Integer)  # Not linked as foreign key because of type mismatch
     social_group_id = db.Column(db.Integer, db.ForeignKey('social_groups.social_group_id'))
@@ -150,12 +205,28 @@ class UserNew(db.Model):
     create_date = db.Column(db.DateTime, default=datetime.utcnow)
     active = db.Column(db.Boolean, default=True)
     users_info_id = db.Column(db.BigInteger, db.ForeignKey('users_info.users_info_id'))
+    actions = db.Column(db.String(20))  # New column for actions
+    incident = db.Column(db.String(50))  # New column for incidents
+
+    __table_args__ = (
+        db.CheckConstraint(
+            'actions IN ("Espera", "Citada", "Atendida", "No interesa", "Ocupada", "No acude", "Derivada", "No contesta")',
+            name='check_actions'
+        ),
+        db.CheckConstraint(
+            'incident IN ("Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE")',
+            name='check_incident'
+        )
+    )
 
 class IdDoc(db.Model):
     __tablename__ = 'id_docs'
     doc_type_id = db.Column(db.SmallInteger, primary_key=True)
     doc_name = db.Column(db.BigInteger)
     doc_template = db.Column(db.CHAR)
+    doc_type_di = db.Column(db.String(64))  # Hash for DNI/NIF file
+    cert_extr_id = db.Column(db.String(64))  # Hash for Certificado extranjería file
+    vida_laboral_id = db.Column(db.String(64))  # Hash for Vida laboral file
 
 class SocialGroup(db.Model):
     __tablename__ = 'social_groups'
@@ -209,6 +280,44 @@ def departments():
 
 @app.route('/new_users')
 def new_users():
+    # Ensure we have at least one record in each required table for testing
+    try:
+        # Create test IdDoc if it doesn't exist
+        if not IdDoc.query.first():
+            test_doc = IdDoc(
+                doc_type_id=1,
+                doc_name=1,
+                doc_template='T'
+            )
+            db.session.add(test_doc)
+            db.session.commit()
+            print("Created test IdDoc record")
+
+        # Create test SocialGroup if it doesn't exist
+        if not SocialGroup.query.first():
+            test_group = SocialGroup(
+                social_group_id=1,
+                group_name='Test Group'
+            )
+            db.session.add(test_group)
+            db.session.commit()
+            print("Created test SocialGroup record")
+
+        # Create test Entity if it doesn't exist
+        if not Entity.query.first():
+            test_entity = Entity(
+                entity_id=1,
+                name='Test Entity'
+            )
+            db.session.add(test_entity)
+            db.session.commit()
+            print("Created test Entity record")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating test records: {str(e)}")
+        traceback.print_exc()
+    
     return render_template('new_users.html')
 
 @app.route('/id_docs')
@@ -286,15 +395,57 @@ def add_user():
         return jsonify({"error": "Error de integridad de datos"}), 400
     except Exception as e:
         db.session.rollback()
+        print(f"Error in add_new_user: {str(e)}")  # Debug log
+        import traceback
+        traceback.print_exc()  # Print full stack trace
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_user', methods=['POST'])
+def update_user():
+    if not request.is_json:
+        return jsonify({"error": "Request must be JSON"}), 415
+    try:
+        data = request.get_json()
+        
+        # Find user by DNI/NIE
+        user = User.query.filter_by(dni_nie=data['dni_nie']).first()
+        if not user:
+            return jsonify({"error": "Usuario no encontrado"}), 404
+
+        # Update user fields
+        user.nombre = data['nombre']
+        user.apellido1 = data['apellido1']
+        user.apellido2 = data.get('apellido2')
+        user.telefono = data['telefono']
+        user.colectivo = data['colectivo']
+        user.acciones = data['acciones']
+        user.incidencia = data.get('incidencia')
+        user.entidad_asignada = data['entidad_asignada']
+        user.acceso_programa = data['acceso_programa']
+        user.observaciones = data.get('observaciones')
+
+        # Also update the UserNew record if it exists
+        user_new = UserNew.query.filter_by(doc_number=data['dni_nie']).first()
+        if user_new:
+            user_new.name = data['nombre']
+            user_new.last_name = data['apellido1']
+            user_new.second_last_name = data.get('apellido2')
+            user_new.phone_number = data['telefono']
+            user_new.actions = data['acciones']
+            user_new.incident = data.get('incidencia')
+
+        db.session.commit()
+        socketio.emit('update', {'message': 'user updated'})
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/get_users')
 def get_users():
     users = User.query.all()
     return jsonify([{
-        'id': user.id,
         'dni_nie': user.dni_nie,
-        'gesprodi': user.gesprodi,
         'nombre': user.nombre,
         'apellido1': user.apellido1,
         'apellido2': user.apellido2,
@@ -327,6 +478,9 @@ def add_tecnico():
         return jsonify({"error": "El nombre de la entidad debe ser único"}), 400
     except Exception as e:
         db.session.rollback()
+        print(f"Error in add_new_user: {str(e)}")  # Debug log
+        import traceback
+        traceback.print_exc()  # Print full stack trace
         return jsonify({"error": str(e)}), 500
 
 @app.route('/get_tecnicos')
@@ -378,20 +532,25 @@ def add_employer():
 def get_employers():
     employers = Employer.query.all()
     return jsonify([{
-        'employer_id': emp.employer_id,
-        'name': emp.name,
-        'last_name': emp.last_name,
-        'second_last_name': emp.second_last_name,
-        'phone_number': emp.phone_number,
-        'mobile_number': emp.mobile_number,
-        'personal_email': emp.personal_email,
-        'entity_email': emp.entity_email,
-        'address_id': emp.address_id,
-        'username': emp.username,
-        'active': emp.active,
-        'last_update': emp.last_update,
-        'department_id': emp.department_id
+        'id': emp.employer_id,
+        'name': f"{emp.name} {emp.last_name}"
     } for emp in employers])
+
+@app.route('/get_social_groups_list')
+def get_social_groups_list():
+    groups = SocialGroup.query.all()
+    return jsonify([{
+        'id': g.social_group_id,
+        'name': g.group_name
+    } for g in groups])
+
+@app.route('/get_entities_list')
+def get_entities_list():
+    entities = Entity.query.all()
+    return jsonify([{
+        'id': e.entity_id,
+        'name': e.name
+    } for e in entities])
 
 # --- Addresses ---
 @app.route('/add_address', methods=['POST'])
@@ -446,14 +605,22 @@ def add_city():
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/get_cities')
-def get_cities():
+@app.route('/get_cities_list')
+def get_cities_list():
     cities = City.query.all()
     return jsonify([{
-        'city_id': c.city_id,
-        'city': c.city,
+        'id': c.city_id,
+        'name': c.city,
         'province_id': c.province_id
     } for c in cities])
+
+@app.route('/get_provinces_list')
+def get_provinces_list():
+    provinces = Province.query.all()
+    return jsonify([{
+        'id': p.province_id,
+        'name': p.province
+    } for p in provinces])
 
 # --- Provinces ---
 @app.route('/add_province', methods=['POST'])
@@ -539,33 +706,130 @@ def get_departments():
     } for d in departments])
 
 # --- New Users (UserNew) ---
+def generate_address_id():
+    import random
+    return f"ADDR_{random.randint(1000000000, 9999999999)}"
+
 @app.route('/add_new_user', methods=['POST'])
 def add_new_user():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
     try:
-        data = request.get_json()
+        print("Form data:", request.form)  # Debug log
+        print("Files:", request.files)  # Debug log
+        
+        # Generate address ID and create address record
+        address_text = request.form.get('address')
+        postal_code = request.form.get('postal_code')
+        city_id = request.form.get('city_id')
+        
+        if address_text or postal_code or city_id:
+            address_id = generate_address_id()
+            new_address = Address(
+                address_id=address_id,
+                address=address_text,
+                postal_code=int(postal_code) if postal_code else None,
+                city_id=int(city_id) if city_id else None
+            )
+            db.session.add(new_address)
+            db.session.commit()
+        else:
+            address_id = None
+
+        # Convert form data to appropriate types
+        doc_number = request.form.get('doc_number')
+        phone_number = request.form.get('phone_number')
+        mobile_number = request.form.get('mobile_number')
+        technician_id = int(request.form.get('technician_id')) if request.form.get('technician_id') else None
+        social_group_id = int(request.form.get('social_group_id')) if request.form.get('social_group_id') else None
+        entity_id = int(request.form.get('entity_id')) if request.form.get('entity_id') else None
+        
+        # Create UserNew record using doc_number as user_no
         new_user = UserNew(
-            user_no=data.get('user_no'),
-            doc_type_id=data.get('doc_type_id'),
-            doc_number=data.get('doc_number'),
-            name=data.get('name'),
-            last_name=data.get('last_name'),
-            second_last_name=data.get('second_last_name'),
-            phone_number=data.get('phone_number'),
-            mobile_number=data.get('mobile_number'),
-            email=data.get('email'),
-            technician_id=data.get('technician_id'),
-            social_group_id=data.get('social_group_id'),
-            address_id=data.get('address_id'),
-            entity_id=data.get('entity_id'),
-            create_date=data.get('create_date') or datetime.utcnow(),
-            active=data.get('active', True),
-            users_info_id=data.get('users_info_id')
+            user_no=doc_number,  # Using doc_number as user_no
+            doc_number=doc_number,
+            name=request.form.get('name'),
+            last_name=request.form.get('last_name'),
+            second_last_name=request.form.get('second_last_name'),
+            phone_number=phone_number,
+            mobile_number=mobile_number,
+            email=request.form.get('email'),
+            technician_id=technician_id,
+            social_group_id=social_group_id,
+            address_id=address_id if address_id else None,
+            entity_id=entity_id,
+            create_date=datetime.strptime(request.form.get('create_date'), '%Y-%m-%dT%H:%M') if request.form.get('create_date') else datetime.utcnow(),
+            active=request.form.get('active') == 'true',
+            users_info_id=None,  # Removed this field
+            actions=request.form.get('actions'),
+            incident=request.form.get('incident')
         )
         db.session.add(new_user)
         db.session.commit()
-        socketio.emit('update', {'message': 'new user added in new users table'})
+
+        # Process and save files
+        file_hashes = {}
+        
+        print("Processing files...")  # Debug log
+        if 'dni_file' in request.files:
+            print("Processing DNI file...")  # Debug log
+            try:
+                file_hash = save_file_with_hash(request.files['dni_file'])
+                print(f"DNI file hash: {file_hash}")  # Debug log
+                if file_hash:
+                    file_hashes['doc_type_di'] = file_hash
+            except Exception as e:
+                print(f"Error saving DNI file: {str(e)}")  # Debug log
+                traceback.print_exc()
+        
+        if 'cert_extr_file' in request.files:
+            print("Processing cert_extr file...")  # Debug log
+            try:
+                file_hash = save_file_with_hash(request.files['cert_extr_file'])
+                print(f"cert_extr file hash: {file_hash}")  # Debug log
+                if file_hash:
+                    file_hashes['cert_extr_id'] = file_hash
+            except Exception as e:
+                print(f"Error saving cert_extr file: {str(e)}")  # Debug log
+                traceback.print_exc()
+        
+        if 'vida_laboral_file' in request.files:
+            print("Processing vida_laboral file...")  # Debug log
+            try:
+                file_hash = save_file_with_hash(request.files['vida_laboral_file'])
+                print(f"vida_laboral file hash: {file_hash}")  # Debug log
+                if file_hash:
+                    file_hashes['vida_laboral_id'] = file_hash
+            except Exception as e:
+                print(f"Error saving vida_laboral file: {str(e)}")  # Debug log
+                traceback.print_exc()
+
+        # Update id_docs with file hashes if any files were uploaded
+        if file_hashes:
+            id_doc = IdDoc.query.get(new_user.doc_type_id)
+            if id_doc:
+                for field, hash_value in file_hashes.items():
+                    setattr(id_doc, field, hash_value)
+                db.session.commit()
+
+        # Also create a record in the User table
+        user = User(
+            dni_nie=new_user.doc_number,
+            nombre=new_user.name,
+            apellido1=new_user.last_name,
+            apellido2=new_user.second_last_name,
+            telefono=new_user.phone_number,
+            # Map values from new user form
+            colectivo="Desemplead@",
+            acciones=new_user.actions,
+            incidencia=new_user.incident,
+            entidad_asignada="Prodiversa",
+            acceso_programa="Sí"
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        # Emit separate events for each table update
+        socketio.emit('update', {'message': 'new user added', 'table': 'new_users'})
+        socketio.emit('update', {'message': 'new user added', 'table': 'users'})
         return jsonify(success=True)
     except Exception as e:
         db.session.rollback()
@@ -573,24 +837,16 @@ def add_new_user():
 
 @app.route('/get_new_users')
 def get_new_users():
-    users_new = UserNew.query.all()
+    # Join with Entity to get entity name
+    users_new = db.session.query(UserNew, Entity.name.label('entity_name'))\
+        .outerjoin(Entity, UserNew.entity_id == Entity.entity_id)\
+        .all()
+    
     return jsonify([{
-        'user_no': u.user_no,
-        'doc_type_id': u.doc_type_id,
-        'doc_number': u.doc_number,
-        'name': u.name,
-        'last_name': u.last_name,
-        'second_last_name': u.second_last_name,
-        'phone_number': u.phone_number,
-        'mobile_number': u.mobile_number,
-        'email': u.email,
-        'technician_id': u.technician_id,
-        'social_group_id': u.social_group_id,
-        'address_id': u.address_id,
-        'entity_id': u.entity_id,
-        'create_date': u.create_date,
-        'active': u.active,
-        'users_info_id': u.users_info_id
+        'name': u[0].name,
+        'last_name': u[0].last_name,
+        'create_date': u[0].create_date,
+        'entity': u[1] if u[1] else ''  # Use entity name from join
     } for u in users_new])
 
 # --- ID Docs ---
@@ -619,7 +875,10 @@ def get_id_docs():
     return jsonify([{
         'doc_type_id': d.doc_type_id,
         'doc_name': d.doc_name,
-        'doc_template': d.doc_template
+        'doc_template': d.doc_template,
+        'doc_type_di': d.doc_type_di,
+        'cert_extr_id': d.cert_extr_id,
+        'vida_laboral_id': d.vida_laboral_id
     } for d in docs])
 
 # --- Social Groups ---

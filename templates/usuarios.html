@@ -1,17 +1,64 @@
 {% extends "base.html" %}
 {% block title %}Usuarios{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between mb-3">
+<div class="mb-3 d-flex justify-content-between align-items-center">
   <h1>Usuarios</h1>
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="bi bi-plus"></i> Add User</button>
+  <div class="dropdown">
+    <button class="btn btn-sm btn-outline-secondary px-2 py-1" type="button" id="sortButton" data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="fas fa-sort"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 200px;">
+      <li><h6 class="dropdown-header">Ordenar por</h6></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('nombre')" id="sort-nombre">
+        <span>Nombre</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('colectivo')" id="sort-colectivo">
+        <span>Colectivo</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('acciones')" id="sort-acciones">
+        <span>Acciones</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('incidencia')" id="sort-incidencia">
+        <span>Incidencia</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('entidad_asignada')" id="sort-entidad_asignada">
+        <span>Entidad asignada</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('acceso_programa')" id="sort-acceso_programa">
+        <span>Acceso al programa</span>
+        <i class="fas fa-check ms-2 sort-check"></i>
+      </button></li>
+      <li><hr class="dropdown-divider"></li>
+      <li>
+        <button class="dropdown-item" type="button" onclick="toggleSortDirection()">
+          <i class="fas fa-sort-amount-down me-2" id="sortDirectionIcon"></i>
+          <span id="sortDirectionText">Descendente</span>
+        </button>
+      </li>
+    </ul>
+  </div>
 </div>
+
+<style>
+.sort-check {
+  visibility: hidden;
+  color: var(--bs-primary);
+}
+.dropdown-item.active .sort-check {
+  visibility: visible;
+}
+</style>
+
 <div class="table-responsive">
   <table class="table table-hover">
     <thead>
       <tr>
-        <th>ID</th>
         <th>DNI/NIE</th>
-        <th>Gesprodi</th>
         <th>Nombre</th>
         <th>Apellido1</th>
         <th>Apellido2</th>
@@ -28,184 +75,373 @@
   </table>
 </div>
 
-<!-- Add User Modal -->
-<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+<!-- User Details Modal -->
+<div class="modal fade" id="userDetailsModal" tabindex="-1" aria-labelledby="userDetailsModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
-      <form id="addUserForm">
-        <div class="modal-header">
-          <h5 class="modal-title" id="addUserModalLabel">Add User</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <!-- User Form Fields -->
+      <div class="modal-header">
+        <h5 class="modal-title" id="userDetailsModalLabel">Detalles del Usuario</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Read-only view -->
+        <div id="userInfoView">
           <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="dni_nie" class="form-label">DNI/NIE</label>
-              <input type="text" class="form-control" id="dni_nie" name="dni_nie" required>
+            <div class="col-md-6">
+              <p><strong>DNI/NIE:</strong> <span id="info-dni_nie"></span></p>
+              <p><strong>Nombre:</strong> <span id="info-nombre"></span></p>
+              <p><strong>Apellido 1:</strong> <span id="info-apellido1"></span></p>
+              <p><strong>Apellido 2:</strong> <span id="info-apellido2"></span></p>
+              <p><strong>Teléfono:</strong> <span id="info-telefono"></span></p>
             </div>
-            <div class="mb-3 col-md-4">
-              <label for="gesprodi" class="form-label">Gesprodi</label>
-              <input type="text" class="form-control" id="gesprodi" name="gesprodi">
+            <div class="col-md-6">
+              <p><strong>Colectivo:</strong> <span id="info-colectivo"></span></p>
+              <p><strong>Acciones:</strong> <span id="info-acciones"></span></p>
+              <p><strong>Incidencia:</strong> <span id="info-incidencia"></span></p>
+              <p><strong>Entidad Asignada:</strong> <span id="info-entidad_asignada"></span></p>
+              <p><strong>Acceso Programa:</strong> <span id="info-acceso_programa"></span></p>
+              <p><strong>Observaciones:</strong> <span id="info-observaciones"></span></p>
             </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="nombre" class="form-label">Nombre</label>
-              <input type="text" class="form-control" id="nombre" name="nombre" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="apellido1" class="form-label">Apellido1</label>
-              <input type="text" class="form-control" id="apellido1" name="apellido1" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="apellido2" class="form-label">Apellido2</label>
-              <input type="text" class="form-control" id="apellido2" name="apellido2">
-            </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="telefono" class="form-label">Teléfono</label>
-              <input type="text" class="form-control" id="telefono" name="telefono" required>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="colectivo" class="form-label">Colectivo</label>
-              <select class="form-select" id="colectivo" name="colectivo" required>
-                <option value="">Select...</option>
-                <option value="Desemplead@">Desemplead@</option>
-                <option value="Discapacidad">Discapacidad</option>
-                <option value="Mayores">Mayores</option>
-                <option value="Exclusión">Exclusión</option>
-                <option value="Inmigrantes">Inmigrantes</option>
-                <option value="Jóvenes sin experiencia laboral">Jóvenes sin experiencia laboral</option>
-                <option value="Mayores de 45">Mayores de 45</option>
-              </select>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="acciones" class="form-label">Acciones</label>
-              <select class="form-select" id="acciones" name="acciones" required>
-                <option value="">Select...</option>
-                <option value="Espera">Espera</option>
-                <option value="Citada">Citada</option>
-                <option value="Atendida">Atendida</option>
-                <option value="No interesa">No interesa</option>
-                <option value="Ocupada">Ocupada</option>
-                <option value="No acude">No acude</option>
-                <option value="Derivada">Derivada</option>
-                <option value="No contesta">No contesta</option>
-              </select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="mb-3 col-md-4">
-              <label for="incidencia" class="form-label">Incidencia</label>
-              <select class="form-select" id="incidencia" name="incidencia">
-                <option value="">Select...</option>
-                <option value="Error de conexión">Error de conexión</option>
-                <option value="No hay información">No hay información</option>
-                <option value="Baja administrativa">Baja administrativa</option>
-                <option value="Participante con otra entidad">Participante con otra entidad</option>
-                <option value="Error NIE">Error NIE</option>
-              </select>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="entidad_asignada" class="form-label">Entidad Asignada</label>
-              <select class="form-select" id="entidad_asignada" name="entidad_asignada" required>
-                <option value="">Select...</option>
-                <option value="Prodiversa">Prodiversa</option>
-                <option value="Mitad del cielo">Mitad del cielo</option>
-                <option value="Acompanya">Acompanya</option>
-                <option value="Forprocer">Forprocer</option>
-              </select>
-            </div>
-            <div class="mb-3 col-md-4">
-              <label for="acceso_programa" class="form-label">Acceso Programa</label>
-              <select class="form-select" id="acceso_programa" name="acceso_programa" required>
-                <option value="">Select...</option>
-                <option value="Sí">Sí</option>
-                <option value="No">No</option>
-              </select>
-            </div>
-          </div>
-          <div class="mb-3">
-            <label for="observaciones" class="form-label">Observaciones</label>
-            <textarea class="form-control" id="observaciones" name="observaciones"></textarea>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-primary">Add User</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        </div>
-      </form>
+
+        <!-- Edit form (initially hidden) -->
+        <form id="editUserForm" style="display: none;">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="edit-dni_nie" class="form-label">DNI/NIE</label>
+                <input type="text" class="form-control" id="edit-dni_nie" name="dni_nie" readonly>
+              </div>
+              <div class="mb-3">
+                <label for="edit-nombre" class="form-label">Nombre</label>
+                <input type="text" class="form-control" id="edit-nombre" name="nombre" required>
+              </div>
+              <div class="mb-3">
+                <label for="edit-apellido1" class="form-label">Apellido 1</label>
+                <input type="text" class="form-control" id="edit-apellido1" name="apellido1" required>
+              </div>
+              <div class="mb-3">
+                <label for="edit-apellido2" class="form-label">Apellido 2</label>
+                <input type="text" class="form-control" id="edit-apellido2" name="apellido2">
+              </div>
+              <div class="mb-3">
+                <label for="edit-telefono" class="form-label">Teléfono</label>
+                <input type="text" class="form-control" id="edit-telefono" name="telefono" required>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <label for="edit-colectivo" class="form-label">Colectivo</label>
+                <select class="form-select" id="edit-colectivo" name="colectivo" required>
+                  <option value="Desemplead@">Desemplead@</option>
+                  <option value="Discapacidad">Discapacidad</option>
+                  <option value="Mayores">Mayores</option>
+                  <option value="Exclusión">Exclusión</option>
+                  <option value="Inmigrantes">Inmigrantes</option>
+                  <option value="Jóvenes sin experiencia laboral">Jóvenes sin experiencia laboral</option>
+                  <option value="Mayores de 45">Mayores de 45</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="edit-acciones" class="form-label">Acciones</label>
+                <select class="form-select" id="edit-acciones" name="acciones" required>
+                  <option value="Espera">Espera</option>
+                  <option value="Citada">Citada</option>
+                  <option value="Atendida">Atendida</option>
+                  <option value="No interesa">No interesa</option>
+                  <option value="Ocupada">Ocupada</option>
+                  <option value="No acude">No acude</option>
+                  <option value="Derivada">Derivada</option>
+                  <option value="No contesta">No contesta</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="edit-incidencia" class="form-label">Incidencia</label>
+                <select class="form-select" id="edit-incidencia" name="incidencia">
+                  <option value="">Ninguna</option>
+                  <option value="Error de conexión">Error de conexión</option>
+                  <option value="No hay información">No hay información</option>
+                  <option value="Baja administrativa">Baja administrativa</option>
+                  <option value="Participante con otra entidad">Participante con otra entidad</option>
+                  <option value="Error NIE">Error NIE</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="edit-entidad_asignada" class="form-label">Entidad Asignada</label>
+                <select class="form-select" id="edit-entidad_asignada" name="entidad_asignada" required>
+                  <option value="Prodiversa">Prodiversa</option>
+                  <option value="Mitad del cielo">Mitad del cielo</option>
+                  <option value="Acompanya">Acompanya</option>
+                  <option value="Forprocer">Forprocer</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="edit-acceso_programa" class="form-label">Acceso Programa</label>
+                <select class="form-select" id="edit-acceso_programa" name="acceso_programa" required>
+                  <option value="Sí">Sí</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="edit-observaciones" class="form-label">Observaciones</label>
+                <textarea class="form-control" id="edit-observaciones" name="observaciones" rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="editButton" onclick="toggleEditMode()">Editar</button>
+        <button type="button" class="btn btn-primary" id="saveButton" onclick="saveUserChanges()" style="display: none;">Guardar cambios</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
     </div>
   </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
+  let currentUser = null;
+
+  function toggleEditMode() {
+    const infoView = $('#userInfoView');
+    const editForm = $('#editUserForm');
+    const editButton = $('#editButton');
+    const saveButton = $('#saveButton');
+
+    if (infoView.is(':visible')) {
+      // Switch to edit mode
+      infoView.hide();
+      editForm.show();
+      editButton.hide();
+      saveButton.show();
+
+      // Populate form with current user data
+      $('#edit-dni_nie').val(currentUser.dni_nie);
+      $('#edit-nombre').val(currentUser.nombre);
+      $('#edit-apellido1').val(currentUser.apellido1);
+      $('#edit-apellido2').val(currentUser.apellido2 || '');
+      $('#edit-telefono').val(currentUser.telefono);
+      $('#edit-colectivo').val(currentUser.colectivo);
+      $('#edit-acciones').val(currentUser.acciones);
+      $('#edit-incidencia').val(currentUser.incidencia || '');
+      $('#edit-entidad_asignada').val(currentUser.entidad_asignada);
+      $('#edit-acceso_programa').val(currentUser.acceso_programa);
+      $('#edit-observaciones').val(currentUser.observaciones || '');
+    }
+  }
+
+  function showUserDetails(user) {
+    currentUser = user;
+    
+    // Update info view
+    $('#info-dni_nie').text(user.dni_nie);
+    $('#info-nombre').text(user.nombre);
+    $('#info-apellido1').text(user.apellido1);
+    $('#info-apellido2').text(user.apellido2 || '');
+    $('#info-telefono').text(user.telefono);
+    $('#info-colectivo').text(user.colectivo);
+    $('#info-acciones').text(user.acciones);
+    $('#info-incidencia').text(user.incidencia || '');
+    $('#info-entidad_asignada').text(user.entidad_asignada);
+    $('#info-acceso_programa').text(user.acceso_programa);
+    $('#info-observaciones').text(user.observaciones || '');
+    
+    // Reset modal state
+    $('#userInfoView').show();
+    $('#editUserForm').hide();
+    $('#editButton').show();
+    $('#saveButton').hide();
+    
+    // Show the modal
+    $('#userDetailsModal').modal('show');
+  }
+
+  function saveUserChanges() {
+    const formData = {
+      dni_nie: $('#edit-dni_nie').val(),
+      nombre: $('#edit-nombre').val(),
+      apellido1: $('#edit-apellido1').val(),
+      apellido2: $('#edit-apellido2').val(),
+      telefono: $('#edit-telefono').val(),
+      colectivo: $('#edit-colectivo').val(),
+      acciones: $('#edit-acciones').val(),
+      incidencia: $('#edit-incidencia').val(),
+      entidad_asignada: $('#edit-entidad_asignada').val(),
+      acceso_programa: $('#edit-acceso_programa').val(),
+      observaciones: $('#edit-observaciones').val()
+    };
+
+    $.ajax({
+      url: '/update_user',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify(formData),
+      success: function(response) {
+        // Update current user data
+        currentUser = { ...currentUser, ...formData };
+        
+        // Update info view
+        $('#info-dni_nie').text(currentUser.dni_nie);
+        $('#info-nombre').text(currentUser.nombre);
+        $('#info-apellido1').text(currentUser.apellido1);
+        $('#info-apellido2').text(currentUser.apellido2 || '');
+        $('#info-telefono').text(currentUser.telefono);
+        $('#info-colectivo').text(currentUser.colectivo);
+        $('#info-acciones').text(currentUser.acciones);
+        $('#info-incidencia').text(currentUser.incidencia || '');
+        $('#info-entidad_asignada').text(currentUser.entidad_asignada);
+        $('#info-acceso_programa').text(currentUser.acceso_programa);
+        $('#info-observaciones').text(currentUser.observaciones || '');
+        
+        // Switch back to info view
+        $('#userInfoView').show();
+        $('#editUserForm').hide();
+        $('#editButton').show();
+        $('#saveButton').hide();
+        
+        // Refresh table
+        loadUsers();
+      },
+      error: function(xhr, status, error) {
+        alert('Error updating user: ' + error);
+      }
+    });
+  }
+
+  let currentUsers = [];
+
+  let sortAscending = false;
+  let currentSortField = 'nombre';
+
+  function setSorting(field) {
+    // Remove active class from all sort items
+    $('.dropdown-item').removeClass('active');
+    // Add active class to selected item
+    $(`#sort-${field}`).addClass('active');
+    
+    currentSortField = field;
+    applySorting();
+  }
+
+  function toggleSortDirection() {
+    sortAscending = !sortAscending;
+    $('#sortDirectionIcon').toggleClass('fa-sort-amount-down fa-sort-amount-up');
+    $('#sortDirectionText').text(sortAscending ? 'Ascendente' : 'Descendente');
+    applySorting();
+  }
+
+  function applySorting() {
+    const sortBy = currentSortField;
+    
+    // Sort the current users array
+    currentUsers.sort((a, b) => {
+      let comparison = 0;
+      let valA, valB;
+      
+      switch(sortBy) {
+        case 'nombre':
+          valA = a.nombre.toLowerCase();
+          valB = b.nombre.toLowerCase();
+          break;
+        case 'colectivo':
+          valA = a.colectivo.toLowerCase();
+          valB = b.colectivo.toLowerCase();
+          break;
+        case 'acciones':
+          valA = a.acciones.toLowerCase();
+          valB = b.acciones.toLowerCase();
+          break;
+        case 'incidencia':
+          valA = (a.incidencia || '').toLowerCase();
+          valB = (b.incidencia || '').toLowerCase();
+          break;
+        case 'entidad_asignada':
+          valA = a.entidad_asignada.toLowerCase();
+          valB = b.entidad_asignada.toLowerCase();
+          break;
+        case 'acceso_programa':
+          valA = a.acceso_programa.toLowerCase();
+          valB = b.acceso_programa.toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+      
+      if (valA < valB) comparison = -1;
+      if (valA > valB) comparison = 1;
+      
+      return sortAscending ? comparison : -comparison;
+    });
+    
+    // Update the table with sorted data
+    updateTable();
+  }
+
+  function updateTable() {
+    let rows = '';
+    currentUsers.forEach(function(user) {
+      rows += `<tr style="cursor: pointer;" data-user='${JSON.stringify(user)}'>
+                <td>${user.dni_nie}</td>
+                <td>${user.nombre}</td>
+                <td>${user.apellido1}</td>
+                <td>${user.apellido2 || ''}</td>
+                <td>${user.telefono}</td>
+                <td>${user.colectivo}</td>
+                <td>${user.acciones}</td>
+                <td>${user.incidencia || ''}</td>
+                <td>${user.entidad_asignada}</td>
+                <td>${user.acceso_programa}</td>
+                <td>${user.observaciones || ''}</td>
+               </tr>`;
+    });
+    $('#usersTableBody').html(rows);
+  }
+
   function loadUsers() {
     $.ajax({
       url: '/get_users',
       method: 'GET',
       success: function(data) {
-        let rows = '';
-        data.forEach(function(user) {
-          rows += `<tr>
-                    <td>${user.id}</td>
-                    <td>${user.dni_nie}</td>
-                    <td>${user.gesprodi || ''}</td>
-                    <td>${user.nombre}</td>
-                    <td>${user.apellido1}</td>
-                    <td>${user.apellido2 || ''}</td>
-                    <td>${user.telefono}</td>
-                    <td>${user.colectivo}</td>
-                    <td>${user.acciones}</td>
-                    <td>${user.incidencia || ''}</td>
-                    <td>${user.entidad_asignada}</td>
-                    <td>${user.acceso_programa}</td>
-                    <td>${user.observaciones || ''}</td>
-                   </tr>`;
-        });
-        $('#usersTableBody').html(rows);
+        currentUsers = data;
+        applySorting();
       },
       error: function(err) {
         alert('Error loading users');
       }
     });
   }
+
+  // Socket.io connection and event handlers
+  const socket = io();
+  
+  socket.on('connect', function() {
+    console.log('Connected to WebSocket');
+  });
+
+  socket.on('update', function(data) {
+    console.log('Received update:', data);
+    if (data.message === 'new user added' && data.table === 'users' || data.message === 'user updated') {
+      loadUsers();
+    }
+  });
+
   $(document).ready(function() {
     loadUsers();
-    $('#addUserForm').submit(function(e) {
-      e.preventDefault();
-      const formData = {
-        dni_nie: $('#dni_nie').val(),
-        gesprodi: $('#gesprodi').val(),
-        nombre: $('#nombre').val(),
-        apellido1: $('#apellido1').val(),
-        apellido2: $('#apellido2').val(),
-        telefono: $('#telefono').val(),
-        colectivo: $('#colectivo').val(),
-        acciones: $('#acciones').val(),
-        incidencia: $('#incidencia').val(),
-        entidad_asignada: $('#entidad_asignada').val(),
-        acceso_programa: $('#acceso_programa').val(),
-        observaciones: $('#observaciones').val()
-      };
-      $.ajax({
-        url: '/add_user',
-        method: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(formData),
-        success: function(response) {
-          $('#addUserModal').modal('hide');
-          loadUsers();
-        },
-        error: function(err) {
-          alert('Error adding user');
-        }
-      });
+    
+    // Set initial active sort item
+    $(`#sort-${currentSortField}`).addClass('active');
+
+    // Add click handler to table rows
+    $('#usersTableBody').on('click', 'tr', function() {
+      const rowData = $(this).data('user');
+      if (rowData) {
+        showUserDetails(rowData);
+      }
     });
   });
 </script>

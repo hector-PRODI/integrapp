@@ -1,0 +1,6 @@
+bin
+users.db
+__pycache__
+.vscode
+instance
+venv
