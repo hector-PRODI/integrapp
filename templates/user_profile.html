@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Perfil de Usuario</h4>
+            <a href="/edit_user/{{ user.dni_nie }}" class="btn btn-light">
+                <i class="bi bi-pencil"></i> Editar Usuario
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="row">
+
+            <!-- Personal Information -->
+            <div class="col-md-6">
+                    <h5 class="card-title">Información Personal</h5>
+                    <table class="table">
+                        <tr>
+                            <th>DNI/NIE:</th>
+                            <td>{{ user.dni_nie }}</td>
+                        </tr>
+                        <tr>
+                            <th>Nombre:</th>
+                            <td>{{ user.nombre }}</td>
+                        </tr>
+                        <tr>
+                            <th>Primer Apellido:</th>
+                            <td>{{ user.apellido1 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Segundo Apellido:</th>
+                            <td>{{ user.apellido2 or 'No especificado' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Teléfono:</th>
+                            <td>{{ user.telefono }}</td>
+                        </tr>
+                        <tr>
+                            <th>Sexo:</th>
+                            <td>{{ user.sex }}</td>
+                        </tr>
+                        <tr>
+                            <th>Fecha de Nacimiento:</th>
+                            <td>{{ user.birth_date.strftime('%d/%m/%Y') if user.birth_date else 'No especificada' }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Program Information -->
+                <div class="col-md-6">
+                    <h5 class="card-title">Información del Programa</h5>
+                    <table class="table">
+                        <tr>
+                            <th>Colectivo:</th>
+                            <td>{{ user.colectivo }}</td>
+                        </tr>
+                        <tr>
+                            <th>Acciones:</th>
+                            <td>{{ user.acciones }}</td>
+                        </tr>
+                        <tr>
+                            <th>Incidencia:</th>
+                            <td>{{ user.incidencia or 'Ninguna' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Entidad Asignada:</th>
+                            <td>{{ user.entidad_asignada }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Projects Section -->
+            {% if user.projects %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="card-title">Proyectos</h5>
+                    <div class="list-group">
+                        {% for project_id in user.projects %}
+                        {% set project = Project.query.get(project_id) %}
+                        {% if project %}
+                        <a href="/project/{{ project_id }}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-folder"></i> {{ project.name }}
+                        </a>
+                        {% else %}
+                        <div class="list-group-item list-group-item-action disabled">
+                            <i class="bi bi-folder"></i> Proyecto no encontrado ({{ project_id }})
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Files Section -->
+            {% if user.files %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="card-title">Archivos</h5>
+                    <div class="list-group">
+                        {% for file_hash in user.files %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                <i class="bi bi-file-earmark-text"></i>
+                                {% if itinerario and itinerario.cv == file_hash %}
+                                    CV
+                                {% elif file_hash in user.files[:1] %}
+                                    DNI/NIE
+                                {% elif file_hash in user.files[1:2] %}
+                                    Certificado Extranjería
+                                {% elif file_hash in user.files[2:3] %}
+                                    Vida Laboral
+                                {% else %}
+                                    Documento {{ loop.index }}
+                                {% endif %}
+                            </span>
+                            <a href="/download_file/{{ file_hash }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-download"></i> Descargar
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Observations -->
+            {% if user.observaciones %}
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h5 class="card-title">Observaciones</h5>
+                    <div class="card">
+                        <div class="card-body">
+                            {{ user.observaciones }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

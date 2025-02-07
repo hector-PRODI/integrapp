@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">Editar Itinerario</h4>
+        </div>
+        <div class="card-body">
+            <form id="editForm">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Situación Laboral</label>
+                            <select class="form-select" name="job_status">
+                                <option value="">Seleccionar...</option>
+                                {% for status in ["Inactivo", "En búsqueda activa", "Indefinido", "Temporal"] %}
+                                <option value="{{ status }}" {% if itinerario.job_status == status %}selected{% endif %}>{{ status }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Educación</label>
+                            <select class="form-select" name="education">
+                                <option value="">Seleccionar...</option>
+                                {% for edu in ["Educación Secundaria Obligatoria (ESO)", "Bachillerato", "Formación Profesional Básica",
+                                             "Ciclos Formativos de Grado Medio", "Ciclos Formativos de Grado Superior",
+                                             "Enseñanzas Artísticas Profesionales", "Enseñanzas Deportivas", "Enseñanzas de Idiomas",
+                                             "Enseñanzas Artísticas Superiores", "Educación Universitaria"] %}
+                                <option value="{{ edu }}" {% if itinerario.education == edu %}selected{% endif %}>{{ edu }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Sector Prioritario</label>
+                            <select class="form-select" name="priority_sector">
+                                <option value="">Seleccionar...</option>
+                                {% for sector in ["Comercio", "Hostelería", "Educación", "Sanidad", "Industria", "Construcción", 
+                                                "Logística y Transporte", "Turismo", "Tecnologías de la Información y Comunicación (TIC)", 
+                                                "Energías Renovables", "Finanzas y Seguros", "Agroalimentario", "Automoción", 
+                                                "Telecomunicaciones", "Servicios Profesionales y Consultoría", 
+                                                "Medios de Comunicación y Publicidad", "Artes y Entretenimiento", "Inmobiliario", 
+                                                "Ciencia e Investigación", "Administración Pública"] %}
+                                <option value="{{ sector }}" {% if itinerario.priority_sector == sector %}selected{% endif %}>{{ sector }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Segundo Sector Prioritario</label>
+                            <select class="form-select" name="priority_sector2">
+                                <option value="">Seleccionar...</option>
+                                {% for sector in ["Comercio", "Hostelería", "Educación", "Sanidad", "Industria", "Construcción", 
+                                                "Logística y Transporte", "Turismo", "Tecnologías de la Información y Comunicación (TIC)", 
+                                                "Energías Renovables", "Finanzas y Seguros", "Agroalimentario", "Automoción", 
+                                                "Telecomunicaciones", "Servicios Profesionales y Consultoría", 
+                                                "Medios de Comunicación y Publicidad", "Artes y Entretenimiento", "Inmobiliario", 
+                                                "Ciencia e Investigación", "Administración Pública"] %}
+                                <option value="{{ sector }}" {% if itinerario.priority_sector2 == sector %}selected{% endif %}>{{ sector }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">CV</label>
+                            <input type="file" class="form-control" name="cv" accept=".pdf,.doc,.docx">
+                            {% if itinerario.cv %}
+                            <div class="mt-2">
+                                <small class="text-muted">CV actual:</small>
+                                <a href="/download_file/{{ itinerario.cv }}" class="btn btn-sm btn-primary ms-2">
+                                    <i class="bi bi-download"></i> Descargar CV actual
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Fecha Inserción</label>
+                            <input type="date" class="form-control" name="insercion_date" 
+                                   value="{{ itinerario.insercion_date.strftime('%Y-%m-%d') if itinerario.insercion_date else '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo Contrato</label>
+                            <select class="form-select" name="contract_type">
+                                <option value="">Seleccionar...</option>
+                                {% for type in ["Temporal", "Indefinido", "Media jornada"] %}
+                                <option value="{{ type }}" {% if itinerario.contract_type == type %}selected{% endif %}>{{ type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">% Jornada</label>
+                            <input type="number" class="form-control" name="workday_percent" 
+                                   value="{{ itinerario.workday_percent or '' }}" min="0" max="100">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha Inserción 2</label>
+                            <input type="date" class="form-control" name="insercion_date2" 
+                                   value="{{ itinerario.insercion_date2.strftime('%Y-%m-%d') if itinerario.insercion_date2 else '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo Contrato 2</label>
+                            <select class="form-select" name="contract_type2">
+                                <option value="">Seleccionar...</option>
+                                {% for type in ["Temporal", "Indefinido", "Media jornada"] %}
+                                <option value="{{ type }}" {% if itinerario.contract_type2 == type %}selected{% endif %}>{{ type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">% Jornada 2</label>
+                            <input type="number" class="form-control" name="workday_percent2" 
+                                   value="{{ itinerario.workday_percent2 or '' }}" min="0" max="100">
+                        </div>
+                    </div>
+                </div>
+                <div class="text-end mt-3">
+                    <a href="/project/{{ user.projects[-1] }}" class="btn btn-secondary me-2">Cancelar</a>
+                    <button type="button" class="btn btn-primary" onclick="saveChanges()">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+async function saveChanges() {
+    const form = document.getElementById('editForm');
+    const formData = new FormData(form);
+
+    try {
+        const response = await fetch('/update_user_itinerario/{{ user.dni_nie }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            window.location.href = '/project/{{ user.projects[-1] }}';
+        } else {
+            alert(result.error || 'Error al actualizar el itinerario');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al actualizar el itinerario');
+    }
+}
+</script>
+{% endblock %}

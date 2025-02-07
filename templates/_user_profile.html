@@ -1,0 +1,92 @@
+<div class="row">
+    <!-- Personal Information -->
+    <div class="col-md-6">
+        <h5>Información Personal</h5>
+        <table class="table">
+            <tr>
+                <th>DNI/NIE:</th>
+                <td>{{ user.dni }}</td>
+            </tr>
+            <tr>
+                <th>Nombre:</th>
+                <td>{{ user.name }}</td>
+            </tr>
+            <tr>
+                <th>Primer Apellido:</th>
+                <td>{{ user.last_name }}</td>
+            </tr>
+            <tr>
+                <th>Segundo Apellido:</th>
+                <td>{{ user.second_last_name or 'No especificado' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Job Information -->
+    <div class="col-md-6">
+        <h5>Información Laboral</h5>
+        <table class="table">
+            <tr>
+                <th>Estado Laboral:</th>
+                <td>{{ user.job_status or 'No especificado' }}</td>
+            </tr>
+            <tr>
+                <th>Sector Prioritario:</th>
+                <td>{{ user.priority_sector or 'No especificado' }}</td>
+            </tr>
+            <tr>
+                <th>Sector Prioritario 2:</th>
+                <td>{{ user.priority_sector2 or 'No especificado' }}</td>
+            </tr>
+            <tr>
+                <th>Educación:</th>
+                <td>{{ user.education or 'No especificado' }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<!-- Employment Details -->
+<div class="row mt-3">
+    <div class="col-12">
+        <h5>Detalles de Empleo</h5>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Fecha Inserción</th>
+                        <th>Tipo Contrato</th>
+                        <th>% Jornada</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th>Empleo 1</th>
+                        <td>{{ user.insercion_date.strftime('%d/%m/%Y') if user.insercion_date else 'No especificada' }}</td>
+                        <td>{{ user.contract_type or 'No especificado' }}</td>
+                        <td>{{ user.workday_percent|string + '%' if user.workday_percent else 'No especificado' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Empleo 2</th>
+                        <td>{{ user.insercion_date2.strftime('%d/%m/%Y') if user.insercion_date2 else 'No especificada' }}</td>
+                        <td>{{ user.contract_type2 or 'No especificado' }}</td>
+                        <td>{{ user.workday_percent2|string + '%' if user.workday_percent2 else 'No especificado' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- CV Section -->
+{% if user.cv %}
+<div class="row mt-3">
+    <div class="col-12">
+        <h5>CV</h5>
+        <a href="/download_file/{{ user.cv }}" class="btn btn-primary">
+            <i class="bi bi-download"></i> Descargar CV
+        </a>
+    </div>
+</div>
+{% endif %}

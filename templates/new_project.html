@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Crear Nuevo Proyecto</h2>
+    <form id="projectForm" class="mt-4">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="name">Nombre del Proyecto*</label>
+                    <input type="text" class="form-control" id="name" name="name" required>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="date_started">Fecha de Inicio</label>
+                    <input type="date" class="form-control" id="date_started" name="date_started">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="date_finished">Fecha de Finalización</label>
+                    <input type="date" class="form-control" id="date_finished" name="date_finished">
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="form-group mb-3">
+                    <label for="files">Documentos del Proyecto</label>
+                    <div class="input-group">
+                        <input type="file" class="form-control" id="files" name="files" multiple>
+                        <button class="btn btn-outline-secondary" type="button" id="uploadBtn">
+                            <i class="fas fa-upload"></i> Subir Archivos
+                        </button>
+                    </div>
+                    <small class="form-text text-muted">Puede seleccionar múltiples archivos.</small>
+                    <div id="fileList" class="mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-3">
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Crear Proyecto</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('projectForm');
+    const fileInput = document.getElementById('files');
+    const fileList = document.getElementById('fileList');
+    const uploadBtn = document.getElementById('uploadBtn');
+
+    // Display selected files
+    fileInput.addEventListener('change', function() {
+        fileList.innerHTML = '';
+        Array.from(this.files).forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'alert alert-info alert-dismissible fade show';
+            fileItem.innerHTML = `
+                ${file.name}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+    });
+
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const formData = new FormData();
+        formData.append('name', document.getElementById('name').value);
+        formData.append('date_started', document.getElementById('date_started').value);
+        formData.append('date_finished', document.getElementById('date_finished').value);
+
+        // Append all selected files
+        Array.from(fileInput.files).forEach(file => {
+            formData.append('files', file);
+        });
+
+        try {
+            const response = await fetch('/add_project', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                alert('Proyecto creado exitosamente');
+                form.reset();
+                fileList.innerHTML = '';
+                window.location.href = '/projects';  // Redirect to projects list
+            } else {
+                alert(result.error || 'Error al crear el proyecto');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al crear el proyecto');
+        }
+    });
+});
+</script>
+{% endblock %}

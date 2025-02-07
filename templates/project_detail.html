@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">{{ project.name }}</h4>
+            <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addUsersModal">
+                <i class="bi bi-plus-circle"></i> Añadir Usuarios
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <h5>Detalles del Proyecto</h5>
+                    <table class="table">
+                        <tr>
+                            <th>ID:</th>
+                            <td>{{ project.id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Fecha Inicio:</th>
+                            <td>{{ project.date_started.strftime('%d/%m/%Y') if project.date_started else 'No especificada' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Fecha Fin:</th>
+                            <td>{{ project.date_finished.strftime('%d/%m/%Y') if project.date_finished else 'No especificada' }}</td>
+                        </tr>
+                        <tr>
+                            <th>Número de Usuarios:</th>
+                            <td>{{ project.number_users }}</td>
+                        </tr>
+                        <tr>
+                            <th>Número de Técnicos:</th>
+                            <td>{{ project.number_tecnicos }}</td>
+                        </tr>
+                        <tr>
+                            <th>Estado:</th>
+                            <td>{{ 'Activo' if project.active else 'Inactivo' }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h5>Archivos del Proyecto</h5>
+                    {% if project.files %}
+                    <div class="list-group">
+                        {% for file in project.files %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>{{ file.name }}</span>
+                            <a href="/download_file/{{ file.hash }}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-download"></i> Descargar
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted">No hay archivos</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <h5>Usuarios en el Proyecto</h5>
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>DNI/NIE</th>
+                            <th>Nombre</th>
+                            <th>Apellidos</th>
+                            <th>Estado Laboral</th>
+                            <th>Sector Prioritario</th>
+                            <th>CV</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.dni }}</td>
+                            <td>{{ user.name }}</td>
+                            <td>{{ user.last_name }} {{ user.second_last_name or '' }}</td>
+                            <td>{{ user.job_status or 'No especificado' }}</td>
+                            <td>{{ user.priority_sector or 'No especificado' }}</td>
+                            <td>
+                                {% if user.cv %}
+                                <a href="/download_file/{{ user.cv }}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-download"></i> Descargar CV
+                                </a>
+                                {% else %}
+                                <span class="text-muted">No disponible</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="/edit_itinerario/{{ user.dni }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-pencil"></i> Editar
+                                    </a>
+                                    <a href="/user_profile/{{ user.dni }}" class="btn btn-sm btn-info">
+                                        <i class="bi bi-person"></i> Ver perfil de usuario
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Users Modal -->
+<div class="modal fade" id="addUsersModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Añadir Usuarios al Proyecto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUsersForm">
+                    <div class="mb-3">
+                        <label class="form-label">Buscar Usuarios</label>
+                        <input type="text" class="form-control" id="userSearch" placeholder="Buscar por nombre / apellido">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Seleccionar Usuarios</label>
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th><input type="checkbox" id="selectAll"></th>
+                                        <th>Nombre</th>
+                                        <th>Apellidos</th>
+                                        <th>DNI/NIE</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="userTableBody">
+                                    {% for user in available_users %}
+                                    <tr class="user-row">
+                                        <td><input type="checkbox" class="user-select" value="{{ user.dni_nie }}"></td>
+                                        <td>{{ user.nombre }}</td>
+                                        <td>{{ user.apellido1 }} {{ user.apellido2 or '' }}</td>
+                                        <td>{{ user.dni_nie }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Entidad</label>
+                        <select class="form-select" name="entity">
+                            <option value="">Seleccionar...</option>
+                            {% for entity in ["Acompanya", "AdobeVerde", "Forprocer", "Prodiversa"] %}
+                            <option value="{{ entity }}">{{ entity }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Situación Laboral</label>
+                        <select class="form-select" name="job_status">
+                            <option value="">Seleccionar...</option>
+                            <option value="Inactivo">Inactivo</option>
+                            <option value="En búsqueda activa">En búsqueda activa</option>
+                            <option value="Indefinido">Indefinido</option>
+                            <option value="Temporal">Temporal</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sector Prioritario</label>
+                        <select class="form-select" name="priority_sector">
+                            <option value="">Seleccionar...</option>
+                            {% for sector in ["Comercio", "Hostelería", "Educación", "Sanidad", "Industria", "Construcción", 
+                                            "Logística y Transporte", "Turismo", "Tecnologías de la Información y Comunicación (TIC)", 
+                                            "Energías Renovables", "Finanzas y Seguros", "Agroalimentario", "Automoción", 
+                                            "Telecomunicaciones", "Servicios Profesionales y Consultoría", 
+                                            "Medios de Comunicación y Publicidad", "Artes y Entretenimiento", "Inmobiliario", 
+                                            "Ciencia e Investigación", "Administración Pública"] %}
+                            <option value="{{ sector }}">{{ sector }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Segundo Sector Prioritario</label>
+                        <select class="form-select" name="priority_sector2">
+                            <option value="">Seleccionar...</option>
+                            {% for sector in ["Comercio", "Hostelería", "Educación", "Sanidad", "Industria", "Construcción", 
+                                            "Logística y Transporte", "Turismo", "Tecnologías de la Información y Comunicación (TIC)", 
+                                            "Energías Renovables", "Finanzas y Seguros", "Agroalimentario", "Automoción", 
+                                            "Telecomunicaciones", "Servicios Profesionales y Consultoría", 
+                                            "Medios de Comunicación y Publicidad", "Artes y Entretenimiento", "Inmobiliario", 
+                                            "Ciencia e Investigación", "Administración Pública"] %}
+                            <option value="{{ sector }}">{{ sector }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Educación</label>
+                        <select class="form-select" name="education">
+                            <option value="">Seleccionar...</option>
+                            {% for edu in ["Educación Secundaria Obligatoria (ESO)", "Bachillerato", "Formación Profesional Básica",
+                                         "Ciclos Formativos de Grado Medio", "Ciclos Formativos de Grado Superior",
+                                         "Enseñanzas Artísticas Profesionales", "Enseñanzas Deportivas", "Enseñanzas de Idiomas",
+                                         "Enseñanzas Artísticas Superiores", "Educación Universitaria"] %}
+                            <option value="{{ edu }}">{{ edu }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">CV</label>
+                        <input type="file" class="form-control" name="cv" accept=".pdf,.doc,.docx">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Inserción</label>
+                        <input type="date" class="form-control" name="insercion_date">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo Contrato</label>
+                        <select class="form-select" name="contract_type">
+                            <option value="">Seleccionar...</option>
+                            <option value="Temporal">Temporal</option>
+                            <option value="Indefinido">Indefinido</option>
+                            <option value="Media jornada">Media jornada</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">% Jornada</label>
+                        <input type="number" class="form-control" name="workday_percent" min="0" max="100">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Fecha Inserción 2</label>
+                        <input type="date" class="form-control" name="insercion_date2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo Contrato 2</label>
+                        <input type="text" class="form-control" name="contract_type2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">% Jornada 2</label>
+                        <input type="number" class="form-control" name="workday_percent2" min="0" max="100">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="addUsers()">Añadir Usuarios</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+// User search functionality
+document.getElementById('userSearch').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('.user-row');
+    
+    rows.forEach(row => {
+        const name = row.children[1].textContent.toLowerCase();
+        const surname = row.children[2].textContent.toLowerCase();
+        const matches = name.includes(searchTerm) || surname.includes(searchTerm);
+        row.style.display = matches ? '' : 'none';
+    });
+});
+
+// Select all functionality
+document.getElementById('selectAll').addEventListener('change', function(e) {
+    const checkboxes = document.querySelectorAll('.user-select');
+    checkboxes.forEach(checkbox => {
+        const row = checkbox.closest('tr');
+        if (row.style.display !== 'none') { // Only select visible rows
+            checkbox.checked = e.target.checked;
+        }
+    });
+});
+
+async function addUsers() {
+    const form = document.getElementById('addUsersForm');
+    const formData = new FormData(form);
+    
+    // Get selected users from checkboxes
+    const selectedUsers = Array.from(document.querySelectorAll('.user-select:checked')).map(cb => cb.value);
+    formData.set('users', JSON.stringify(selectedUsers));
+    
+    // Add project ID
+    formData.append('project_id', '{{ project.id }}');
+
+    try {
+        const response = await fetch('/add_users_to_project', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            window.location.reload();
+        } else {
+            alert(result.error || 'Error al añadir usuarios');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al añadir usuarios');
+    }
+}
+</script>
+{% endblock %}

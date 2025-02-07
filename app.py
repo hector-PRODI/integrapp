@@ -1,15 +1,31 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import update, event
+from sqlalchemy import update, event, types
+from sqlalchemy.types import TypeDecorator, Text
 import uuid
 import re
 import os
 import hashlib
 import traceback
+import json
+import random
 from datetime import datetime
 from werkzeug.utils import secure_filename
+
+class ArrayType(TypeDecorator):
+    impl = Text
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return None
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return []
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -29,43 +45,74 @@ def ensure_upload_folder():
 def generate_file_hash(file_data):
     return hashlib.sha256(file_data).hexdigest()
 
-def save_file_with_hash(file):
-    print(f"Saving file: {file.filename}")  # Debug log
+def save_user_file(file, user):
+    """Save a file for a user with format surname-name-dni.pdf"""
+    if not file:
+        print("No file provided")
+        return None, None
+        
+    if not file.filename:
+        print("Empty filename")
+        return None, None
+        
+    if not allowed_file(file.filename):
+        print(f"Invalid file type: {file.filename}")
+        return None, None
+        
+    try:
+        # Create filename in format surname-name-dni.ext
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        
+        # Handle both legacy User and UserNew models
+        if hasattr(user, 'apellido1'):  # Legacy User model
+            surname = user.apellido1
+            name = user.nombre
+            doc = user.dni_nie
+        else:  # UserNew model
+            surname = user.last_name
+            name = user.name
+            doc = user.doc_number
+            
+        if not all([surname, name, doc]):
+            print(f"Missing required user data: surname={surname}, name={name}, doc={doc}")
+            return None, None
+            
+        new_filename = f"{surname.lower()}-{name.lower()}-{doc.lower()}.{ext}"
+        new_filename = secure_filename(new_filename)
+        
+        # Save file
+        ensure_upload_folder()
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+        file.save(file_path)
+        
+        # Generate and return hash for database reference
+        with open(file_path, 'rb') as f:
+            file_hash = generate_file_hash(f.read())
+            
+        print(f"File saved successfully: {new_filename} with hash {file_hash}")
+        return file_hash, new_filename
+    except Exception as e:
+        print(f"Error in save_user_file: {str(e)}")
+        traceback.print_exc()
+        return None, None
+
+def save_project_file(file, project_dir):
+    """Save a project file keeping its original name"""
     if file and allowed_file(file.filename):
         try:
-            # Read file data and generate hash
-            try:
-                file_data = file.read()
-            except ValueError:
-                # If file has already been read, seek to beginning
-                file.seek(0)
-                file_data = file.read()
-            
-            file_hash = generate_file_hash(file_data)
-            print(f"Generated hash: {file_hash}")  # Debug log
-            
-            # Create filename with hash
             filename = secure_filename(file.filename)
-            ext = filename.rsplit('.', 1)[1].lower()
-            new_filename = f"{file_hash}.{ext}"
-            print(f"New filename: {new_filename}")  # Debug log
-            
-            # Save file
-            ensure_upload_folder()
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
-            print(f"File path: {file_path}")  # Debug log
-            
-            # Seek to beginning of file before writing
-            file.seek(0)
+            file_path = os.path.join(project_dir, filename)
             file.save(file_path)
-            print("File saved successfully")  # Debug log
             
-            return file_hash
+            # Generate and return hash for database reference
+            with open(file_path, 'rb') as f:
+                file_hash = generate_file_hash(f.read())
+            return file_hash, filename
         except Exception as e:
-            print(f"Error in save_file_with_hash: {str(e)}")  # Debug log
+            print(f"Error in save_project_file: {str(e)}")
             traceback.print_exc()
             raise
-    return None
+    return None, None
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
@@ -77,13 +124,14 @@ socketio = SocketIO(app)
 # --- Original Models ---
 
 class Tecnico(db.Model):
-    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = db.Column(db.String(50), primary_key=True, default=lambda: f"TEC_{random.randint(1000, 9999)}")
     nombre = db.Column(db.String(50), unique=True, nullable=False)
     area = db.Column(db.String(50), nullable=False)
     inserciones = db.Column(db.Integer, default=0)
 
 class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    __tablename__ = 'legacy_users'
+    id = db.Column(db.String(50), primary_key=True, default=lambda: f"USR_{random.randint(1000000000, 9999999999)}")
     dni_nie = db.Column(db.String(9), unique=True, nullable=False)
     gesprodi = db.Column(db.String(20), nullable=True)
     nombre = db.Column(db.String(50), nullable=False)
@@ -96,8 +144,16 @@ class User(db.Model):
     entidad_asignada = db.Column(db.String(20), nullable=False)
     acceso_programa = db.Column(db.String(2), nullable=False)
     observaciones = db.Column(db.Text, nullable=True)
+    sex = db.Column(db.String(1))  # New column for sex
+    birth_date = db.Column(db.Date)  # New column for birth date
+    projects = db.Column(ArrayType)  # New column for projects array
+    files = db.Column(ArrayType)  # New column for file hashes array
 
     __table_args__ = (
+        db.CheckConstraint(
+            'sex IN ("M", "F", "O")',  # M = Male, F = Female, O = Other
+            name='check_sex'
+        ),
         db.CheckConstraint(
             'colectivo IN ("Desemplead@", "Discapacidad", "Mayores", "Exclusión", "Inmigrantes", "Jóvenes sin experiencia laboral", "Mayores de 45")',
             name='check_colectivo'
@@ -107,7 +163,7 @@ class User(db.Model):
             name='check_acciones'
         ),
         db.CheckConstraint(
-            'incidencia IN ("Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE")',
+            'incidencia IN ("Ninguna", "Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE")',
             name='check_incidencia'
         ),
         db.CheckConstraint(
@@ -129,18 +185,32 @@ def validate_dni_nie(dni):
 @event.listens_for(User, 'after_insert')
 def after_user_insert(mapper, connection, target):
     try:
-        stmt = update(Tecnico)\
-            .where(Tecnico.nombre == target.entidad_asignada)\
-            .values(inserciones=Tecnico.inserciones + 1)
-        connection.execute(stmt)
+        from sqlalchemy import text
+        
+        # First check if the tecnico exists using raw SQL with proper parameter binding
+        result = connection.execute(
+            text("SELECT id, inserciones FROM tecnico WHERE nombre = :nombre"),
+            {"nombre": target.entidad_asignada}
+        ).first()
+        
+        if not result:
+            print(f"Error: No tecnico found with nombre={target.entidad_asignada}")
+            return
+            
+        # Update inserciones count using raw SQL with proper parameter binding
+        connection.execute(
+            text("UPDATE tecnico SET inserciones = :new_count WHERE id = :id"),
+            {"new_count": result.inserciones + 1, "id": result.id}
+        )
     except Exception as e:
         print(f"Error updating inserciones: {str(e)}")
+        traceback.print_exc()
 
 # --- New Models (New Schema) ---
 
 class Employer(db.Model):
     __tablename__ = 'employers'
-    employer_id = db.Column(db.Integer, primary_key=True)
+    employer_id = db.Column(db.String(50), primary_key=True, default=lambda: f"EMP_{random.randint(1000000000, 9999999999)}")
     name = db.Column(db.String)
     last_name = db.Column(db.String)
     second_last_name = db.Column(db.String)
@@ -148,49 +218,49 @@ class Employer(db.Model):
     mobile_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
     personal_email = db.Column(db.String)
     entity_email = db.Column(db.String)
-    address_id = db.Column(db.BigInteger, db.ForeignKey('address.address_id'))
+    address_id = db.Column(db.String(50), db.ForeignKey('address.address_id'))
     username = db.Column(db.String)
     password = db.Column(db.String)
     picture = db.Column(db.LargeBinary)
     active = db.Column(db.Boolean, default=True)
     last_update = db.Column(db.DateTime, default=datetime.utcnow)
-    department_id = db.Column(db.SmallInteger, db.ForeignKey('departments.department_id'))
+    department_id = db.Column(db.String(50), db.ForeignKey('departments.department_id'))
 
 class Address(db.Model):
     __tablename__ = 'address'
-    address_id = db.Column(db.BigInteger, primary_key=True)
+    address_id = db.Column(db.String(50), primary_key=True, default=lambda: f"ADDR_{random.randint(1000000000, 9999999999)}")
     address = db.Column(db.String)
     address2 = db.Column(db.String)
-    postal_code = db.Column(db.SmallInteger)
-    city_id = db.Column(db.BigInteger, db.ForeignKey('city.city_id'))
+    postal_code = db.Column(db.String(10))  # Changed to String to handle postal codes with leading zeros
+    city_id = db.Column(db.String(50), db.ForeignKey('city.city_id'))
 
 class City(db.Model):
     __tablename__ = 'city'
-    city_id = db.Column(db.BigInteger, primary_key=True)
+    city_id = db.Column(db.String(50), primary_key=True, default=lambda: f"CITY_{random.randint(1000000000, 9999999999)}")
     city = db.Column(db.String)
-    province_id = db.Column(db.SmallInteger, db.ForeignKey('provinces.province_id'))
+    province_id = db.Column(db.String(50), db.ForeignKey('provinces.province_id'))
 
 class Province(db.Model):
     __tablename__ = 'provinces'
-    province_id = db.Column(db.SmallInteger, primary_key=True)
+    province_id = db.Column(db.String(50), primary_key=True, default=lambda: f"PROV_{random.randint(1000000000, 9999999999)}")
     province = db.Column(db.String)
 
 class Entity(db.Model):
     __tablename__ = 'entity'
-    entity_id = db.Column(db.SmallInteger, primary_key=True)
+    entity_id = db.Column(db.String(50), primary_key=True, default=lambda: f"ENTI_{random.randint(1000000000, 9999999999)}")
     name = db.Column(db.String)
 
 class Department(db.Model):
     __tablename__ = 'departments'
-    department_id = db.Column(db.SmallInteger, primary_key=True)
+    department_id = db.Column(db.String(50), primary_key=True, default=lambda: f"DEPT_{random.randint(1000000000, 9999999999)}")
     name = db.Column(db.String)
-    entity_id = db.Column(db.SmallInteger, db.ForeignKey('entity.entity_id'))
+    entity_id = db.Column(db.String(50), db.ForeignKey('entity.entity_id'))
 
 # Note: To avoid name conflicts, we name this model "UserNew"
 class UserNew(db.Model):
     __tablename__ = 'users'
-    user_no = db.Column(db.SmallInteger, primary_key=True)
-    doc_type_id = db.Column(db.SmallInteger, db.ForeignKey('id_docs.doc_type_id'))
+    user_no = db.Column(db.String(50), primary_key=True, default=lambda: f"USR_{random.randint(1000000000, 9999999999)}")
+    doc_type_id = db.Column(db.String(50), db.ForeignKey('id_docs.doc_type_id'))
     doc_number = db.Column(db.String)
     name = db.Column(db.String)
     last_name = db.Column(db.String)
@@ -198,15 +268,19 @@ class UserNew(db.Model):
     phone_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
     mobile_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
     email = db.Column(db.String)
-    technician_id = db.Column(db.Integer)  # Not linked as foreign key because of type mismatch
-    social_group_id = db.Column(db.Integer, db.ForeignKey('social_groups.social_group_id'))
-    address_id = db.Column(db.BigInteger, db.ForeignKey('address.address_id'))
-    entity_id = db.Column(db.SmallInteger, db.ForeignKey('entity.entity_id'))
+    technician_id = db.Column(db.String(50))  # Not linked as foreign key because of type mismatch
+    social_group_id = db.Column(db.String(50), db.ForeignKey('social_groups.social_group_id'))
+    address_id = db.Column(db.String(50), db.ForeignKey('address.address_id'))
+    entity_id = db.Column(db.String(50), db.ForeignKey('entity.entity_id'))
     create_date = db.Column(db.DateTime, default=datetime.utcnow)
     active = db.Column(db.Boolean, default=True)
-    users_info_id = db.Column(db.BigInteger, db.ForeignKey('users_info.users_info_id'))
+    users_info_id = db.Column(db.String(50), db.ForeignKey('users_info.users_info_id'))
     actions = db.Column(db.String(20))  # New column for actions
     incident = db.Column(db.String(50))  # New column for incidents
+    sex = db.Column(db.String(1))  # New column for sex
+    birth_date = db.Column(db.Date)  # New column for birth date
+    projects = db.Column(ArrayType)  # New column for projects array
+    files = db.Column(ArrayType)  # New column for file hashes array
 
     __table_args__ = (
         db.CheckConstraint(
@@ -216,13 +290,17 @@ class UserNew(db.Model):
         db.CheckConstraint(
             'incident IN ("Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE")',
             name='check_incident'
+        ),
+        db.CheckConstraint(
+            'sex IN ("M", "F", "O")',  # M = Male, F = Female, O = Other
+            name='check_sex'
         )
     )
 
 class IdDoc(db.Model):
     __tablename__ = 'id_docs'
-    doc_type_id = db.Column(db.SmallInteger, primary_key=True)
-    doc_name = db.Column(db.BigInteger)
+    doc_type_id = db.Column(db.String(50), primary_key=True, default=lambda: f"DOC_{random.randint(1000000000, 9999999999)}")
+    doc_name = db.Column(db.String(100))
     doc_template = db.Column(db.CHAR)
     doc_type_di = db.Column(db.String(64))  # Hash for DNI/NIF file
     cert_extr_id = db.Column(db.String(64))  # Hash for Certificado extranjería file
@@ -230,17 +308,286 @@ class IdDoc(db.Model):
 
 class SocialGroup(db.Model):
     __tablename__ = 'social_groups'
-    social_group_id = db.Column(db.Integer, primary_key=True)
+    social_group_id = db.Column(db.String(50), primary_key=True, default=lambda: f"SITU_{random.randint(1000000000, 9999999999)}")
     group_name = db.Column(db.String)
 
 class UsersInfo(db.Model):
     __tablename__ = 'users_info'
-    users_info_id = db.Column(db.BigInteger, primary_key=True)
+    users_info_id = db.Column(db.String(50), primary_key=True, default=lambda: f"INFO_{random.randint(1000000000, 9999999999)}")
     technician_observ = db.Column(db.String)
+
+class Project(db.Model):
+    __tablename__ = 'projects'
+    id = db.Column(db.String(50), primary_key=True, default=lambda: f"PROY_{random.randint(1000000000, 9999999999)}")
+    name = db.Column(db.String, nullable=False)
+    date_started = db.Column(db.Date, nullable=True)
+    date_finished = db.Column(db.Date, nullable=True)
+    number_users = db.Column(db.Integer, default=0)
+    number_tecnicos = db.Column(db.Integer, default=0)
+    files = db.Column(ArrayType, nullable=True)  # Array of {hash: string, name: string}
+    active = db.Column(db.Boolean, default=True)
+
+class Itinerario(db.Model):
+    __tablename__ = 'itinerario'
+    dni = db.Column(db.String(9), db.ForeignKey('legacy_users.dni_nie'), primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    last_name = db.Column(db.String(50), nullable=False)
+    second_last_name = db.Column(db.String(50), nullable=True)
+    job_status = db.Column(db.String(50), nullable=True)
+    priority_sector = db.Column(db.String(100), nullable=True)
+    priority_sector2 = db.Column(db.String(100), nullable=True)
+    cv = db.Column(db.String(64), nullable=True)  # Hash for CV file
+    education = db.Column(db.String(100), nullable=True)
+    integrales_course = db.Column(ArrayType, nullable=True)
+    insercion_date = db.Column(db.Date, nullable=True)
+    contract_type = db.Column(db.String(50), nullable=True)
+    workday_percent = db.Column(db.Float, nullable=True)
+    insercion_date2 = db.Column(db.Date, nullable=True)
+    contract_type2 = db.Column(db.String(50), nullable=True)
+    workday_percent2 = db.Column(db.Float, nullable=True)
+
+    # Relationship with User model
+    user = db.relationship('User', backref=db.backref('itinerario', lazy=True))
 
 # ===============================
 # Routes (Template Views)
 # ===============================
+
+@app.route('/projects')
+def projects():
+    projects = Project.query.all()
+    return render_template('projects.html', projects=projects)
+
+@app.route('/project/<project_id>')
+def project_detail(project_id):
+    project = Project.query.get_or_404(project_id)
+    
+    # Get users in this project by joining with User and filtering by project_id
+    users = db.session.query(Itinerario)\
+        .join(User, Itinerario.dni == User.dni_nie)\
+        .filter(User.projects.contains(project_id))\
+        .all()
+    
+    # Get users not in this project for the add user modal
+    users_in_project = User.query.filter(User.projects.contains(project_id)).all()
+    user_ids_in_project = [user.dni_nie for user in users_in_project]
+    available_users = User.query.filter(~User.dni_nie.in_(user_ids_in_project) if user_ids_in_project else True).all()
+    
+    return render_template('project_detail.html', 
+                         project=project, 
+                         users=users, 
+                         available_users=available_users)
+
+@app.route('/add_users_to_project', methods=['POST'])
+def add_users_to_project():
+    try:
+        project_id = request.form.get('project_id')
+        selected_users = json.loads(request.form.get('users', '[]'))
+        
+        if not project_id or not selected_users:
+            return jsonify({"error": "Missing required data"}), 400
+
+        project = Project.query.get_or_404(project_id)
+        
+        for user_dni in selected_users:
+            # Get user data
+            user = User.query.filter_by(dni_nie=user_dni).first()
+            if not user:
+                continue
+
+            # Create itinerario record
+            itinerario = Itinerario(
+                dni=user_dni,
+                name=user.nombre,
+                last_name=user.apellido1,
+                second_last_name=user.apellido2,
+                job_status=request.form.get('job_status'),
+                priority_sector=request.form.get('priority_sector'),
+                priority_sector2=request.form.get('priority_sector2'),
+                education=request.form.get('education'),
+                insercion_date=datetime.strptime(request.form.get('insercion_date'), '%Y-%m-%d').date() if request.form.get('insercion_date') else None,
+                contract_type=request.form.get('contract_type'),
+                workday_percent=float(request.form.get('workday_percent')) if request.form.get('workday_percent') else None,
+                insercion_date2=datetime.strptime(request.form.get('insercion_date2'), '%Y-%m-%d').date() if request.form.get('insercion_date2') else None,
+                contract_type2=request.form.get('contract_type2'),
+                workday_percent2=float(request.form.get('workday_percent2')) if request.form.get('workday_percent2') else None
+            )
+
+            # Handle CV file
+            if 'cv' in request.files:
+                cv_file = request.files['cv']
+                if cv_file and allowed_file(cv_file.filename):
+                    # Create user directory in project
+                    user_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'files', project_id, user_dni)
+                    os.makedirs(user_dir, exist_ok=True)
+                    
+                    # Save file with user-specific name
+                    file_hash, _ = save_user_file(cv_file, user)
+                    if file_hash:
+                        itinerario.cv = file_hash
+
+            db.session.add(itinerario)
+            
+            # Update user's projects array
+            if not user.projects:
+                user.projects = []
+            user.projects.append(project_id)
+            
+            # Update project's user count
+            project.number_users += 1
+
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in add_users_to_project: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_profile/<user_id>')
+def get_user_profile(user_id):
+    user = Itinerario.query.get_or_404(user_id)
+    return jsonify({
+        'success': True,
+        'html': render_template('_user_profile.html', user=user)
+    })
+
+@app.route('/add_user_itinerario/<user_id>', methods=['POST'])
+def add_user_itinerario(user_id):
+    try:
+        # Get the user
+        user = User.query.filter_by(dni_nie=user_id).first_or_404()
+        
+        # Create new itinerario
+        itinerario = Itinerario(
+            dni=user_id,
+            name=user.nombre,
+            last_name=user.apellido1,
+            second_last_name=user.apellido2,
+            job_status=request.form.get('job_status'),
+            education=request.form.get('education'),
+            priority_sector=request.form.get('priority_sector')
+        )
+
+        # Handle CV file
+        if 'cv' in request.files:
+            cv_file = request.files['cv']
+            if cv_file and allowed_file(cv_file.filename):
+                file_hash, _ = save_user_file(cv_file, user)
+                if file_hash:
+                    itinerario.cv = file_hash
+
+        db.session.add(itinerario)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating itinerario: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/edit_user/<user_id>')
+def edit_user(user_id):
+    user = User.query.filter_by(dni_nie=user_id).first_or_404()
+    return render_template('edit_user.html', user=user)
+
+@app.route('/user_profile/<user_id>')
+def user_profile(user_id):
+    user = User.query.filter_by(dni_nie=user_id).first_or_404()
+    itinerario = Itinerario.query.get(user_id)
+    return render_template('user_profile.html', 
+                         user=user, 
+                         itinerario=itinerario,
+                         Project=Project)  # Pass the Project model to the template
+
+@app.route('/update_user_itinerario/<user_id>', methods=['POST'])
+def update_user_itinerario(user_id):
+    try:
+        user = Itinerario.query.get_or_404(user_id)
+
+        # Update basic fields
+        user.job_status = request.form.get('job_status')
+        user.education = request.form.get('education')
+        user.priority_sector = request.form.get('priority_sector')
+        user.priority_sector2 = request.form.get('priority_sector2')
+        
+        # Handle dates
+        if request.form.get('insercion_date'):
+            user.insercion_date = datetime.strptime(request.form.get('insercion_date'), '%Y-%m-%d').date()
+        if request.form.get('insercion_date2'):
+            user.insercion_date2 = datetime.strptime(request.form.get('insercion_date2'), '%Y-%m-%d').date()
+        
+        # Update contract information
+        user.contract_type = request.form.get('contract_type')
+        user.contract_type2 = request.form.get('contract_type2')
+        
+        # Update workday percentages
+        if request.form.get('workday_percent'):
+            user.workday_percent = float(request.form.get('workday_percent'))
+        if request.form.get('workday_percent2'):
+            user.workday_percent2 = float(request.form.get('workday_percent2'))
+
+            # Handle CV file
+            if 'cv' in request.files:
+                cv_file = request.files['cv']
+                file_hash, _ = save_user_file(cv_file, user)
+                if file_hash:
+                    user.cv = file_hash
+
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating user itinerario: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/new_project')
+def new_project():
+    return render_template('new_project.html')
+
+@app.route('/add_project', methods=['POST'])
+def add_project():
+    try:
+        # Generate project ID (PROY_XXXX)
+        project_count = Project.query.count()
+        project_id = f"PROY_{(project_count + 1):04d}"
+
+        # Create project directory for files
+        project_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'files', project_id, 'docs')
+        os.makedirs(project_dir, exist_ok=True)
+
+        # Process project files keeping original names
+        files = request.files.getlist('files')
+        file_data = []
+        
+        for file in files:
+            file_hash, filename = save_project_file(file, project_dir)
+            if file_hash and filename:
+                file_data.append({'hash': file_hash, 'name': filename})
+
+        # Create new project
+        new_project = Project(
+            id=project_id,
+            name=request.form.get('name'),
+            date_started=datetime.strptime(request.form.get('date_started'), '%Y-%m-%d').date() if request.form.get('date_started') else None,
+            date_finished=datetime.strptime(request.form.get('date_finished'), '%Y-%m-%d').date() if request.form.get('date_finished') else None,
+            number_users=0,
+            number_tecnicos=0,
+            files=file_data,
+            active=True
+        )
+        
+        db.session.add(new_project)
+        db.session.commit()
+        
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in add_project: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/')
 def index():
@@ -285,8 +632,8 @@ def new_users():
         # Create test IdDoc if it doesn't exist
         if not IdDoc.query.first():
             test_doc = IdDoc(
-                doc_type_id=1,
-                doc_name=1,
+                doc_type_id='DOC_' + str(random.randint(1000, 9999)),
+                doc_name='Test Document',
                 doc_template='T'
             )
             db.session.add(test_doc)
@@ -296,7 +643,7 @@ def new_users():
         # Create test SocialGroup if it doesn't exist
         if not SocialGroup.query.first():
             test_group = SocialGroup(
-                social_group_id=1,
+                social_group_id='SITU_' + str(random.randint(1000, 9999)),
                 group_name='Test Group'
             )
             db.session.add(test_group)
@@ -306,7 +653,7 @@ def new_users():
         # Create test Entity if it doesn't exist
         if not Entity.query.first():
             test_entity = Entity(
-                entity_id=1,
+                entity_id='ENTI_TEST_' + str(random.randint(1000, 9999)),
                 name='Test Entity'
             )
             db.session.add(test_entity)
@@ -379,7 +726,7 @@ def add_user():
             telefono=data['telefono'],
             colectivo=data['colectivo'],
             acciones=data['acciones'],
-            incidencia=data.get('incidencia'),
+            incidencia=data.get('incidencia') or None,
             entidad_asignada=data['entidad_asignada'],
             acceso_programa=data['acceso_programa'],
             observaciones=data.get('observaciones')
@@ -455,7 +802,11 @@ def get_users():
         'incidencia': user.incidencia,
         'entidad_asignada': user.entidad_asignada,
         'acceso_programa': user.acceso_programa,
-        'observaciones': user.observaciones
+        'observaciones': user.observaciones,
+        'sex': user.sex,
+        'birth_date': user.birth_date.strftime('%Y-%m-%d') if user.birth_date else None,
+        'projects': user.projects if user.projects else [],
+        'files': user.files if user.files else []
     } for user in users])
 
 # --- Tecnicos ---
@@ -466,6 +817,7 @@ def add_tecnico():
     try:
         data = request.get_json()
         new_tecnico = Tecnico(
+            id=f"TEC_{data['nombre'][:2].upper()}_{random.randint(1000, 9999)}",
             nombre=data['nombre'],
             area=data['area']
         )
@@ -726,8 +1078,8 @@ def add_new_user():
             new_address = Address(
                 address_id=address_id,
                 address=address_text,
-                postal_code=int(postal_code) if postal_code else None,
-                city_id=int(city_id) if city_id else None
+                postal_code=postal_code,
+                city_id=city_id
             )
             db.session.add(new_address)
             db.session.commit()
@@ -738,13 +1090,39 @@ def add_new_user():
         doc_number = request.form.get('doc_number')
         phone_number = request.form.get('phone_number')
         mobile_number = request.form.get('mobile_number')
-        technician_id = int(request.form.get('technician_id')) if request.form.get('technician_id') else None
-        social_group_id = int(request.form.get('social_group_id')) if request.form.get('social_group_id') else None
-        entity_id = int(request.form.get('entity_id')) if request.form.get('entity_id') else None
+        technician_id = request.form.get('technician_id')
+        social_group_id = request.form.get('social_group_id')
+        entity_id = request.form.get('entity_id')
         
-        # Create UserNew record using doc_number as user_no
+        # Get incident value and handle it according to the model's constraints
+        incident = request.form.get('incident')
+        if incident == "Ninguna":
+            incident = None
+        
+        # Generate user_no
+        user_no = f"USR_{random.randint(1000, 9999)}"
+        
+        # Validate required IDs exist
+        doc_type_id = request.form.get('doc_type_id')
+        if not IdDoc.query.get(doc_type_id):
+            return jsonify({"error": "Invalid document type"}), 400
+
+        entity_id = request.form.get('entity_id')
+        if not Entity.query.get(entity_id):
+            return jsonify({"error": "Invalid entity"}), 400
+
+        if request.form.get('social_group_id'):
+            if not SocialGroup.query.get(request.form.get('social_group_id')):
+                return jsonify({"error": "Invalid social group"}), 400
+
+        if request.form.get('city_id'):
+            if not City.query.get(request.form.get('city_id')):
+                return jsonify({"error": "Invalid city"}), 400
+
+        # Create UserNew record
         new_user = UserNew(
-            user_no=doc_number,  # Using doc_number as user_no
+            user_no=user_no,
+            doc_type_id=doc_type_id,
             doc_number=doc_number,
             name=request.form.get('name'),
             last_name=request.form.get('last_name'),
@@ -756,26 +1134,31 @@ def add_new_user():
             social_group_id=social_group_id,
             address_id=address_id if address_id else None,
             entity_id=entity_id,
-            create_date=datetime.strptime(request.form.get('create_date'), '%Y-%m-%dT%H:%M') if request.form.get('create_date') else datetime.utcnow(),
-            active=request.form.get('active') == 'true',
-            users_info_id=None,  # Removed this field
+            create_date=datetime.utcnow(),
+            active=True,
             actions=request.form.get('actions'),
-            incident=request.form.get('incident')
+            incident=incident,
+            sex=request.form.get('sex'),
+            birth_date=datetime.strptime(request.form.get('birth_date'), '%Y-%m-%d').date() if request.form.get('birth_date') else None,
+            projects=[],
+            files=[]
         )
         db.session.add(new_user)
         db.session.commit()
 
         # Process and save files
         file_hashes = {}
+        files_array = []  # Array to store file hashes
         
         print("Processing files...")  # Debug log
         if 'dni_file' in request.files:
             print("Processing DNI file...")  # Debug log
             try:
-                file_hash = save_file_with_hash(request.files['dni_file'])
+                file_hash, _ = save_user_file(request.files['dni_file'], new_user)
                 print(f"DNI file hash: {file_hash}")  # Debug log
                 if file_hash:
                     file_hashes['doc_type_di'] = file_hash
+                    files_array.append(file_hash)
             except Exception as e:
                 print(f"Error saving DNI file: {str(e)}")  # Debug log
                 traceback.print_exc()
@@ -783,10 +1166,11 @@ def add_new_user():
         if 'cert_extr_file' in request.files:
             print("Processing cert_extr file...")  # Debug log
             try:
-                file_hash = save_file_with_hash(request.files['cert_extr_file'])
+                file_hash, _ = save_user_file(request.files['cert_extr_file'], new_user)
                 print(f"cert_extr file hash: {file_hash}")  # Debug log
                 if file_hash:
                     file_hashes['cert_extr_id'] = file_hash
+                    files_array.append(file_hash)
             except Exception as e:
                 print(f"Error saving cert_extr file: {str(e)}")  # Debug log
                 traceback.print_exc()
@@ -794,10 +1178,11 @@ def add_new_user():
         if 'vida_laboral_file' in request.files:
             print("Processing vida_laboral file...")  # Debug log
             try:
-                file_hash = save_file_with_hash(request.files['vida_laboral_file'])
+                file_hash, _ = save_user_file(request.files['vida_laboral_file'], new_user)
                 print(f"vida_laboral file hash: {file_hash}")  # Debug log
                 if file_hash:
                     file_hashes['vida_laboral_id'] = file_hash
+                    files_array.append(file_hash)
             except Exception as e:
                 print(f"Error saving vida_laboral file: {str(e)}")  # Debug log
                 traceback.print_exc()
@@ -810,8 +1195,12 @@ def add_new_user():
                     setattr(id_doc, field, hash_value)
                 db.session.commit()
 
-        # Also create a record in the User table
-        user = User(
+        # Update the files array in UserNew
+        new_user.files = files_array
+        db.session.commit()
+
+        # Also create a record in the legacy User table
+        legacy_user = User(
             dni_nie=new_user.doc_number,
             nombre=new_user.name,
             apellido1=new_user.last_name,
@@ -822,9 +1211,19 @@ def add_new_user():
             acciones=new_user.actions,
             incidencia=new_user.incident,
             entidad_asignada="Prodiversa",
-            acceso_programa="Sí"
+            acceso_programa="Sí",
+            sex=request.form.get('sex'),
+            birth_date=datetime.strptime(request.form.get('birth_date'), '%Y-%m-%d').date() if request.form.get('birth_date') else None,
+            projects=request.form.getlist('projects[]') if request.form.getlist('projects[]') else [],
+            files=list(file_hashes.values()) if file_hashes else []
         )
-        db.session.add(user)
+
+        # Validate incidencia for legacy_user
+        valid_incidencia_values = ["Ninguna", "Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE"]
+        if legacy_user.incidencia not in valid_incidencia_values and legacy_user.incidencia is not None:
+            return jsonify({"error": "Valor de incidencia inválido para legacy_user"}), 400
+
+        db.session.add(legacy_user)
         db.session.commit()
 
         # Emit separate events for each table update
@@ -935,6 +1334,24 @@ def get_user_info():
         'technician_observ': info.technician_observ
     } for info in infos])
 
+@app.route('/download_file/<file_hash>')
+def download_file(file_hash):
+    # Search for the file in the bin directory and its subdirectories
+    for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
+        for file in files:
+            if file.startswith(file_hash) or generate_file_hash(open(os.path.join(root, file), 'rb').read()) == file_hash:
+                file_path = os.path.join(root, file)
+                # Get the original filename from the path
+                filename = os.path.basename(file_path)
+                return send_file(file_path, as_attachment=True, download_name=filename)
+    return jsonify({"error": "File not found"}), 404
+
+@app.route('/edit_itinerario/<user_id>')
+def edit_itinerario(user_id):
+    user = User.query.filter_by(dni_nie=user_id).first_or_404()
+    itinerario = Itinerario.query.get_or_404(user_id)
+    return render_template('edit_itinerario.html', user=user, itinerario=itinerario)
+
 # ===============================
 # SocketIO Connection
 # ===============================
@@ -948,4 +1365,54 @@ def handle_connect():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # This will create all tables if they don't exist
+        
+        # Add entities and their corresponding tecnicos if they don't exist
+        # Add entities and their corresponding tecnicos if they don't exist
+        entities_and_areas = {
+            'Prodiversa': 'Área Social',
+            'Mitad del cielo': 'Área Social',
+            'Acompanya': 'Área Social',
+            'Forprocer': 'Área Social'
+        }
+        for name, area in entities_and_areas.items():
+            # Add entity if it doesn't exist
+            if not Entity.query.filter_by(name=name).first():
+                entity = Entity(
+                    entity_id='ENTI_' + ''.join(word[0].upper() for word in name.split())[:2] + str(random.randint(1000, 9999)),
+                    name=name
+                )
+                db.session.add(entity)
+                db.session.commit()
+            
+            # Add tecnico if it doesn't exist
+            if not Tecnico.query.filter_by(nombre=name).first():
+                tecnico = Tecnico(
+                    id=f"TEC_{name[:2].upper()}_{random.randint(1000, 9999)}",
+                    nombre=name,
+                    area=area
+                )
+                db.session.add(tecnico)
+                db.session.commit()
+        
+        # Add social groups if they don't exist
+        social_groups = [
+            'Inactivo',
+            'Discapacidad',
+            'Mayores',
+            'Exclusión',
+            'Inmigrante',
+            'Joven sin experiencia laboral',
+            'Mayores de 45'
+        ]
+        for group_name in social_groups:
+            if not SocialGroup.query.filter_by(group_name=group_name).first():
+                group_id = 'SITU_' + str(random.randint(1000, 9999))
+                group = SocialGroup(social_group_id=group_id, group_name=group_name)
+                db.session.add(group)
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            print(f"Error adding default data: {str(e)}")
+            db.session.rollback()
     socketio.run(app, host='0.0.0.0', port=5050, debug=True)

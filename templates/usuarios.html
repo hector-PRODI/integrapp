@@ -1,203 +1,56 @@
 {% extends "base.html" %}
-{% block title %}Usuarios{% endblock %}
+
 {% block content %}
-<div class="mb-3 d-flex justify-content-between align-items-center">
-  <h1>Usuarios</h1>
-  <div class="dropdown">
-    <button class="btn btn-sm btn-outline-secondary px-2 py-1" type="button" id="sortButton" data-bs-toggle="dropdown" aria-expanded="false">
-      <i class="fas fa-sort"></i>
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 200px;">
-      <li><h6 class="dropdown-header">Ordenar por</h6></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('nombre')" id="sort-nombre">
-        <span>Nombre</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('colectivo')" id="sort-colectivo">
-        <span>Colectivo</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('acciones')" id="sort-acciones">
-        <span>Acciones</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('incidencia')" id="sort-incidencia">
-        <span>Incidencia</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('entidad_asignada')" id="sort-entidad_asignada">
-        <span>Entidad asignada</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><button class="dropdown-item d-flex align-items-center justify-content-between" type="button" onclick="setSorting('acceso_programa')" id="sort-acceso_programa">
-        <span>Acceso al programa</span>
-        <i class="fas fa-check ms-2 sort-check"></i>
-      </button></li>
-      <li><hr class="dropdown-divider"></li>
-      <li>
-        <button class="dropdown-item" type="button" onclick="toggleSortDirection()">
-          <i class="fas fa-sort-amount-down me-2" id="sortDirectionIcon"></i>
-          <span id="sortDirectionText">Descendente</span>
-        </button>
-      </li>
-    </ul>
-  </div>
-</div>
-
-<style>
-.sort-check {
-  visibility: hidden;
-  color: var(--bs-primary);
-}
-.dropdown-item.active .sort-check {
-  visibility: visible;
-}
-</style>
-
-<div class="table-responsive">
-  <table class="table table-hover">
-    <thead>
-      <tr>
-        <th>DNI/NIE</th>
-        <th>Nombre</th>
-        <th>Apellido1</th>
-        <th>Apellido2</th>
-        <th>Teléfono</th>
-        <th>Colectivo</th>
-        <th>Acciones</th>
-        <th>Incidencia</th>
-        <th>Entidad Asignada</th>
-        <th>Acceso Programa</th>
-        <th>Observaciones</th>
-      </tr>
-    </thead>
-    <tbody id="usersTableBody"></tbody>
-  </table>
-</div>
-
-<!-- User Details Modal -->
-<div class="modal fade" id="userDetailsModal" tabindex="-1" aria-labelledby="userDetailsModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="userDetailsModalLabel">Detalles del Usuario</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <!-- Read-only view -->
-        <div id="userInfoView">
-          <div class="row">
-            <div class="col-md-6">
-              <p><strong>DNI/NIE:</strong> <span id="info-dni_nie"></span></p>
-              <p><strong>Nombre:</strong> <span id="info-nombre"></span></p>
-              <p><strong>Apellido 1:</strong> <span id="info-apellido1"></span></p>
-              <p><strong>Apellido 2:</strong> <span id="info-apellido2"></span></p>
-              <p><strong>Teléfono:</strong> <span id="info-telefono"></span></p>
-            </div>
-            <div class="col-md-6">
-              <p><strong>Colectivo:</strong> <span id="info-colectivo"></span></p>
-              <p><strong>Acciones:</strong> <span id="info-acciones"></span></p>
-              <p><strong>Incidencia:</strong> <span id="info-incidencia"></span></p>
-              <p><strong>Entidad Asignada:</strong> <span id="info-entidad_asignada"></span></p>
-              <p><strong>Acceso Programa:</strong> <span id="info-acceso_programa"></span></p>
-              <p><strong>Observaciones:</strong> <span id="info-observaciones"></span></p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Edit form (initially hidden) -->
-        <form id="editUserForm" style="display: none;">
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="edit-dni_nie" class="form-label">DNI/NIE</label>
-                <input type="text" class="form-control" id="edit-dni_nie" name="dni_nie" readonly>
-              </div>
-              <div class="mb-3">
-                <label for="edit-nombre" class="form-label">Nombre</label>
-                <input type="text" class="form-control" id="edit-nombre" name="nombre" required>
-              </div>
-              <div class="mb-3">
-                <label for="edit-apellido1" class="form-label">Apellido 1</label>
-                <input type="text" class="form-control" id="edit-apellido1" name="apellido1" required>
-              </div>
-              <div class="mb-3">
-                <label for="edit-apellido2" class="form-label">Apellido 2</label>
-                <input type="text" class="form-control" id="edit-apellido2" name="apellido2">
-              </div>
-              <div class="mb-3">
-                <label for="edit-telefono" class="form-label">Teléfono</label>
-                <input type="text" class="form-control" id="edit-telefono" name="telefono" required>
-              </div>
-            </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <label for="edit-colectivo" class="form-label">Colectivo</label>
-                <select class="form-select" id="edit-colectivo" name="colectivo" required>
-                  <option value="Desemplead@">Desemplead@</option>
-                  <option value="Discapacidad">Discapacidad</option>
-                  <option value="Mayores">Mayores</option>
-                  <option value="Exclusión">Exclusión</option>
-                  <option value="Inmigrantes">Inmigrantes</option>
-                  <option value="Jóvenes sin experiencia laboral">Jóvenes sin experiencia laboral</option>
-                  <option value="Mayores de 45">Mayores de 45</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="edit-acciones" class="form-label">Acciones</label>
-                <select class="form-select" id="edit-acciones" name="acciones" required>
-                  <option value="Espera">Espera</option>
-                  <option value="Citada">Citada</option>
-                  <option value="Atendida">Atendida</option>
-                  <option value="No interesa">No interesa</option>
-                  <option value="Ocupada">Ocupada</option>
-                  <option value="No acude">No acude</option>
-                  <option value="Derivada">Derivada</option>
-                  <option value="No contesta">No contesta</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="edit-incidencia" class="form-label">Incidencia</label>
-                <select class="form-select" id="edit-incidencia" name="incidencia">
-                  <option value="">Ninguna</option>
-                  <option value="Error de conexión">Error de conexión</option>
-                  <option value="No hay información">No hay información</option>
-                  <option value="Baja administrativa">Baja administrativa</option>
-                  <option value="Participante con otra entidad">Participante con otra entidad</option>
-                  <option value="Error NIE">Error NIE</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="edit-entidad_asignada" class="form-label">Entidad Asignada</label>
-                <select class="form-select" id="edit-entidad_asignada" name="entidad_asignada" required>
-                  <option value="Prodiversa">Prodiversa</option>
-                  <option value="Mitad del cielo">Mitad del cielo</option>
-                  <option value="Acompanya">Acompanya</option>
-                  <option value="Forprocer">Forprocer</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="edit-acceso_programa" class="form-label">Acceso Programa</label>
-                <select class="form-select" id="edit-acceso_programa" name="acceso_programa" required>
-                  <option value="Sí">Sí</option>
-                  <option value="No">No</option>
-                </select>
-              </div>
-              <div class="mb-3">
-                <label for="edit-observaciones" class="form-label">Observaciones</label>
-                <textarea class="form-control" id="edit-observaciones" name="observaciones" rows="3"></textarea>
-              </div>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="editButton" onclick="toggleEditMode()">Editar</button>
-        <button type="button" class="btn btn-primary" id="saveButton" onclick="saveUserChanges()" style="display: none;">Guardar cambios</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-      </div>
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Usuarios</h2>
+        <a href="/new_users" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nuev@ usuari@
+        </a>
     </div>
-  </div>
+
+    <!-- Search and Filter Controls -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="searchInput" placeholder="Buscar por nombre o DNI...">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <select class="form-select" id="filterField">
+                <option value="">Filtrar por...</option>
+                <option value="colectivo">Colectivo</option>
+                <option value="acciones">Acciones</option>
+                <option value="entidad">Entidad</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" id="filterValue" placeholder="Valor del filtro...">
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>DNI/NIE</th>
+                    <th>Nombre</th>
+                    <th>Apellidos</th>
+                    <th>Teléfono</th>
+                    <th>Colectivo</th>
+                    <th>Acciones</th>
+                    <th>Entidad</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="usersTableBody">
+                <!-- Table content will be populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
 </div>
 
 {% endblock %}
@@ -205,244 +58,122 @@
 {% block scripts %}
 {{ super() }}
 <script>
-  let currentUser = null;
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const filterField = document.getElementById('filterField');
+    const filterValue = document.getElementById('filterValue');
+    const tableBody = document.getElementById('usersTableBody');
 
-  function toggleEditMode() {
-    const infoView = $('#userInfoView');
-    const editForm = $('#editUserForm');
-    const editButton = $('#editButton');
-    const saveButton = $('#saveButton');
+    // Load users on page load
+    loadUsers();
 
-    if (infoView.is(':visible')) {
-      // Switch to edit mode
-      infoView.hide();
-      editForm.show();
-      editButton.hide();
-      saveButton.show();
+    // Add event listeners for search and filter
+    searchInput.addEventListener('input', filterUsers);
+    filterField.addEventListener('change', filterUsers);
+    filterValue.addEventListener('input', filterUsers);
 
-      // Populate form with current user data
-      $('#edit-dni_nie').val(currentUser.dni_nie);
-      $('#edit-nombre').val(currentUser.nombre);
-      $('#edit-apellido1').val(currentUser.apellido1);
-      $('#edit-apellido2').val(currentUser.apellido2 || '');
-      $('#edit-telefono').val(currentUser.telefono);
-      $('#edit-colectivo').val(currentUser.colectivo);
-      $('#edit-acciones').val(currentUser.acciones);
-      $('#edit-incidencia').val(currentUser.incidencia || '');
-      $('#edit-entidad_asignada').val(currentUser.entidad_asignada);
-      $('#edit-acceso_programa').val(currentUser.acceso_programa);
-      $('#edit-observaciones').val(currentUser.observaciones || '');
+    // Socket.io connection for real-time updates
+    const socket = io();
+    socket.on('update', function(data) {
+        if (data.message === 'new user added' || data.message === 'user updated') {
+            loadUsers();
+        }
+    });
+
+    // Function to load users
+    async function loadUsers() {
+        try {
+            const response = await fetch('/get_users');
+            const users = await response.json();
+            displayUsers(users);
+        } catch (error) {
+            console.error('Error loading users:', error);
+        }
     }
-  }
 
-  function showUserDetails(user) {
-    currentUser = user;
-    
-    // Update info view
-    $('#info-dni_nie').text(user.dni_nie);
-    $('#info-nombre').text(user.nombre);
-    $('#info-apellido1').text(user.apellido1);
-    $('#info-apellido2').text(user.apellido2 || '');
-    $('#info-telefono').text(user.telefono);
-    $('#info-colectivo').text(user.colectivo);
-    $('#info-acciones').text(user.acciones);
-    $('#info-incidencia').text(user.incidencia || '');
-    $('#info-entidad_asignada').text(user.entidad_asignada);
-    $('#info-acceso_programa').text(user.acceso_programa);
-    $('#info-observaciones').text(user.observaciones || '');
-    
-    // Reset modal state
-    $('#userInfoView').show();
-    $('#editUserForm').hide();
-    $('#editButton').show();
-    $('#saveButton').hide();
-    
-    // Show the modal
-    $('#userDetailsModal').modal('show');
-  }
-
-  function saveUserChanges() {
-    const formData = {
-      dni_nie: $('#edit-dni_nie').val(),
-      nombre: $('#edit-nombre').val(),
-      apellido1: $('#edit-apellido1').val(),
-      apellido2: $('#edit-apellido2').val(),
-      telefono: $('#edit-telefono').val(),
-      colectivo: $('#edit-colectivo').val(),
-      acciones: $('#edit-acciones').val(),
-      incidencia: $('#edit-incidencia').val(),
-      entidad_asignada: $('#edit-entidad_asignada').val(),
-      acceso_programa: $('#edit-acceso_programa').val(),
-      observaciones: $('#edit-observaciones').val()
-    };
-
-    $.ajax({
-      url: '/update_user',
-      method: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify(formData),
-      success: function(response) {
-        // Update current user data
-        currentUser = { ...currentUser, ...formData };
-        
-        // Update info view
-        $('#info-dni_nie').text(currentUser.dni_nie);
-        $('#info-nombre').text(currentUser.nombre);
-        $('#info-apellido1').text(currentUser.apellido1);
-        $('#info-apellido2').text(currentUser.apellido2 || '');
-        $('#info-telefono').text(currentUser.telefono);
-        $('#info-colectivo').text(currentUser.colectivo);
-        $('#info-acciones').text(currentUser.acciones);
-        $('#info-incidencia').text(currentUser.incidencia || '');
-        $('#info-entidad_asignada').text(currentUser.entidad_asignada);
-        $('#info-acceso_programa').text(currentUser.acceso_programa);
-        $('#info-observaciones').text(currentUser.observaciones || '');
-        
-        // Switch back to info view
-        $('#userInfoView').show();
-        $('#editUserForm').hide();
-        $('#editButton').show();
-        $('#saveButton').hide();
-        
-        // Refresh table
-        loadUsers();
-      },
-      error: function(xhr, status, error) {
-        alert('Error updating user: ' + error);
-      }
-    });
-  }
-
-  let currentUsers = [];
-
-  let sortAscending = false;
-  let currentSortField = 'nombre';
-
-  function setSorting(field) {
-    // Remove active class from all sort items
-    $('.dropdown-item').removeClass('active');
-    // Add active class to selected item
-    $(`#sort-${field}`).addClass('active');
-    
-    currentSortField = field;
-    applySorting();
-  }
-
-  function toggleSortDirection() {
-    sortAscending = !sortAscending;
-    $('#sortDirectionIcon').toggleClass('fa-sort-amount-down fa-sort-amount-up');
-    $('#sortDirectionText').text(sortAscending ? 'Ascendente' : 'Descendente');
-    applySorting();
-  }
-
-  function applySorting() {
-    const sortBy = currentSortField;
-    
-    // Sort the current users array
-    currentUsers.sort((a, b) => {
-      let comparison = 0;
-      let valA, valB;
-      
-      switch(sortBy) {
-        case 'nombre':
-          valA = a.nombre.toLowerCase();
-          valB = b.nombre.toLowerCase();
-          break;
-        case 'colectivo':
-          valA = a.colectivo.toLowerCase();
-          valB = b.colectivo.toLowerCase();
-          break;
-        case 'acciones':
-          valA = a.acciones.toLowerCase();
-          valB = b.acciones.toLowerCase();
-          break;
-        case 'incidencia':
-          valA = (a.incidencia || '').toLowerCase();
-          valB = (b.incidencia || '').toLowerCase();
-          break;
-        case 'entidad_asignada':
-          valA = a.entidad_asignada.toLowerCase();
-          valB = b.entidad_asignada.toLowerCase();
-          break;
-        case 'acceso_programa':
-          valA = a.acceso_programa.toLowerCase();
-          valB = b.acceso_programa.toLowerCase();
-          break;
-        default:
-          return 0;
-      }
-      
-      if (valA < valB) comparison = -1;
-      if (valA > valB) comparison = 1;
-      
-      return sortAscending ? comparison : -comparison;
-    });
-    
-    // Update the table with sorted data
-    updateTable();
-  }
-
-  function updateTable() {
-    let rows = '';
-    currentUsers.forEach(function(user) {
-      rows += `<tr style="cursor: pointer;" data-user='${JSON.stringify(user)}'>
+    // Function to display users
+    function displayUsers(users) {
+        tableBody.innerHTML = '';
+        users.forEach(user => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
                 <td>${user.dni_nie}</td>
                 <td>${user.nombre}</td>
-                <td>${user.apellido1}</td>
-                <td>${user.apellido2 || ''}</td>
+                <td>${user.apellido1} ${user.apellido2 || ''}</td>
                 <td>${user.telefono}</td>
                 <td>${user.colectivo}</td>
                 <td>${user.acciones}</td>
-                <td>${user.incidencia || ''}</td>
                 <td>${user.entidad_asignada}</td>
-                <td>${user.acceso_programa}</td>
-                <td>${user.observaciones || ''}</td>
-               </tr>`;
-    });
-    $('#usersTableBody').html(rows);
-  }
-
-  function loadUsers() {
-    $.ajax({
-      url: '/get_users',
-      method: 'GET',
-      success: function(data) {
-        currentUsers = data;
-        applySorting();
-      },
-      error: function(err) {
-        alert('Error loading users');
-      }
-    });
-  }
-
-  // Socket.io connection and event handlers
-  const socket = io();
-  
-  socket.on('connect', function() {
-    console.log('Connected to WebSocket');
-  });
-
-  socket.on('update', function(data) {
-    console.log('Received update:', data);
-    if (data.message === 'new user added' && data.table === 'users' || data.message === 'user updated') {
-      loadUsers();
+                <td>
+                    <span class="badge ${getBadgeClass(user.acciones)}">
+                        ${user.acciones}
+                    </span>
+                </td>
+                <td>
+                    <a href="/user_profile/${user.dni_nie}" class="btn btn-sm btn-info">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        });
     }
-  });
 
-  $(document).ready(function() {
-    loadUsers();
-    
-    // Set initial active sort item
-    $(`#sort-${currentSortField}`).addClass('active');
+    // Function to filter users
+    function filterUsers() {
+        const searchText = searchInput.value.toLowerCase();
+        const field = filterField.value;
+        const value = filterValue.value.toLowerCase();
 
-    // Add click handler to table rows
-    $('#usersTableBody').on('click', 'tr', function() {
-      const rowData = $(this).data('user');
-      if (rowData) {
-        showUserDetails(rowData);
-      }
-    });
-  });
+        Array.from(tableBody.getElementsByTagName('tr')).forEach(row => {
+            const dni = row.cells[0].textContent.toLowerCase();
+            const name = row.cells[1].textContent.toLowerCase();
+            const surname = row.cells[2].textContent.toLowerCase();
+            const fieldValue = field ? getFieldValue(row, field).toLowerCase() : '';
+            
+            const matchesSearch = dni.includes(searchText) || 
+                                name.includes(searchText) || 
+                                surname.includes(searchText);
+            const matchesFilter = !field || fieldValue.includes(value);
+            
+            row.style.display = matchesSearch && matchesFilter ? '' : 'none';
+        });
+    }
+
+    // Helper function to get field value based on filter field
+    function getFieldValue(row, field) {
+        switch (field) {
+            case 'colectivo':
+                return row.cells[4].textContent;
+            case 'acciones':
+                return row.cells[5].textContent;
+            case 'entidad':
+                return row.cells[6].textContent;
+            default:
+                return '';
+        }
+    }
+
+    // Helper function to get badge class based on action
+    function getBadgeClass(action) {
+        switch (action) {
+            case 'Atendida':
+                return 'bg-success';
+            case 'Espera':
+                return 'bg-warning text-dark';
+            case 'Citada':
+                return 'bg-info';
+            case 'No interesa':
+            case 'No acude':
+                return 'bg-danger';
+            case 'Ocupada':
+                return 'bg-primary';
+            case 'Derivada':
+                return 'bg-secondary';
+            default:
+                return 'bg-light text-dark';
+        }
+    }
+});
 </script>
 {% endblock %}
