@@ -1,9 +1,12 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import update, event, types
 from sqlalchemy.types import TypeDecorator, Text
+from flask_session import Session
+from functools import wraps
+import msal
 import uuid
 import re
 import os
@@ -13,26 +16,115 @@ import json
 import random
 from datetime import datetime
 from werkzeug.utils import secure_filename
-
-class ArrayType(TypeDecorator):
-    impl = Text
-
-    def process_bind_param(self, value, dialect):
-        if value is not None:
-            return json.dumps(value)
-        return None
-
-    def process_result_value(self, value, dialect):
-        if value is not None:
-            return json.loads(value)
-        return []
+import requests
 
 app = Flask(__name__)
+
+# Azure AD Configuration
+app.config.update({
+    'SESSION_TYPE': 'filesystem',
+    'AZURE_CLIENT_ID': '',  # From Azure Portal registration
+    'AZURE_CLIENT_SECRET': '',  # From Azure Portal registration
+    'AZURE_TENANT_ID': '',  # From Azure Portal
+    'AZURE_AUTHORITY': 'https://login.microsoftonline.com/',
+    'AZURE_REDIRECT_PATH': '/getAToken',  # Redirect URI registered in Azure Portal
+    'SCOPE': [
+        'https://graph.microsoft.com/User.Read',
+        'https://graph.microsoft.com/User.Read.All',
+        'https://graph.microsoft.com/email',
+        'https://graph.microsoft.com/profile'
+    ],
+    'ENDPOINT': 'https://graph.microsoft.com/v1.0/me'  # Microsoft Graph API endpoint
+})
+
+# Other app configurations
 app.config['SECRET_KEY'] = 'secret!'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = 'bin'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+Session(app)  # Initialize Flask-Session
+
+# Helper functions for Azure AD
+def load_cache():
+    cache = msal.SerializableTokenCache()
+    if session.get("token_cache"):
+        cache.deserialize(session["token_cache"])
+    return cache
+
+def save_cache(cache):
+    if cache.has_state_changed:
+        session["token_cache"] = cache.serialize()
+
+def build_msal_app(cache=None):
+    return msal.ConfidentialClientApplication(
+        app.config['AZURE_CLIENT_ID'],
+        authority=app.config['AZURE_AUTHORITY'],
+        client_credential=app.config['AZURE_CLIENT_SECRET'],
+        token_cache=cache
+    )
+
+def get_token_from_cache(scope=None):
+    cache = load_cache()
+    cca = build_msal_app(cache)
+    accounts = cca.get_accounts()
+    if accounts:
+        result = cca.acquire_token_silent(scope, account=accounts[0])
+        save_cache(cca.token_cache)
+        return result
+
+# Decorator definition
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Authentication routes
+@app.route("/login")
+def login():
+    session["flow"] = build_msal_app().initiate_auth_code_flow(
+        app.config['SCOPE'],
+        redirect_uri=url_for("authorized", _external=True)
+    )
+    return redirect(session["flow"]["auth_uri"])
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(
+        app.config['AZURE_AUTHORITY'] + "/oauth2/v2.0/logout" +
+        "?post_logout_redirect_uri=" + url_for("index", _external=True)
+    )
+
+@app.route(app.config['AZURE_REDIRECT_PATH'])
+def authorized():
+    try:
+        cache = load_cache()
+        result = build_msal_app(cache).acquire_token_by_auth_code_flow(
+            session.get("flow", {}),
+            request.args,
+            scopes=app.config['SCOPE']
+        )
+        save_cache(cache)
+
+        if "error" in result:
+            return render_template("auth_error.html", result=result)
+
+        session["user"] = result.get("id_token_claims")
+        return redirect(url_for("index"))
+    except ValueError:
+        return redirect(url_for("login"))
+
+# Protected routes
+@app.route('/')
+@login_required
+def index():
+    return render_template('index.html')
+
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
 def allowed_file(filename):
@@ -116,6 +208,20 @@ def save_project_file(file, project_dir):
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
+
+# Custom Array Type for SQLAlchemy
+class ArrayType(TypeDecorator):
+    impl = Text
+    
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return None
+        
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return []
 
 # ===============================
 # Models (Existing and New)
@@ -225,6 +331,10 @@ class Employer(db.Model):
     active = db.Column(db.Boolean, default=True)
     last_update = db.Column(db.DateTime, default=datetime.utcnow)
     department_id = db.Column(db.String(50), db.ForeignKey('departments.department_id'))
+    azure_id = db.Column(db.String(100), unique=True)  # Azure AD Object ID
+    azure_email = db.Column(db.String(255))  # Azure AD Email
+    azure_display_name = db.Column(db.String(255))  # Azure AD Display Name
+    last_login = db.Column(db.DateTime)  # Track last login
 
 class Address(db.Model):
     __tablename__ = 'address'
@@ -588,11 +698,6 @@ def add_project():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
 @app.route('/usuarios')
 def usuarios():
     return render_template('usuarios.html')
@@ -602,6 +707,7 @@ def tecnicos():
     return render_template('tecnicos.html')
 
 @app.route('/employers')
+@login_required
 def employers():
     return render_template('employers.html')
 
@@ -867,7 +973,11 @@ def add_employer():
             picture=data.get('picture'),
             active=data.get('active', True),
             last_update=data.get('last_update'),
-            department_id=data.get('department_id')
+            department_id=data.get('department_id'),
+            azure_id=data.get('azure_id'),
+            azure_email=data.get('azure_email'),
+            azure_display_name=data.get('azure_display_name'),
+            last_login=data.get('last_login')
         )
         db.session.add(new_employer)
         db.session.commit()
@@ -887,6 +997,7 @@ def get_employers():
         'id': emp.employer_id,
         'name': f"{emp.name} {emp.last_name}"
     } for emp in employers])
+
 
 @app.route('/get_social_groups_list')
 def get_social_groups_list():
@@ -1367,7 +1478,6 @@ if __name__ == '__main__':
         db.create_all()  # This will create all tables if they don't exist
         
         # Add entities and their corresponding tecnicos if they don't exist
-        # Add entities and their corresponding tecnicos if they don't exist
         entities_and_areas = {
             'Prodiversa': 'Área Social',
             'Mitad del cielo': 'Área Social',
@@ -1415,4 +1525,4 @@ if __name__ == '__main__':
         except Exception as e:
             print(f"Error adding default data: {str(e)}")
             db.session.rollback()
-    socketio.run(app, host='0.0.0.0', port=5050, debug=True)
+    socketio.run(app, host='localhost', port=5050)

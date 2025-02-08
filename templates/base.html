@@ -75,6 +75,12 @@
   </nav>
 
   <main class="container py-4">
+    {% if session.get("user") %}
+      <span>{{ session["user"]["name"] }}</span>
+      <a href="{{ url_for('logout') }}">Logout</a>
+    {% else %}
+      <a href="{{ url_for('login') }}">Login</a>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 

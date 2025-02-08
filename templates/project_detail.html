@@ -158,6 +158,12 @@
                         </select>
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">Técnico Asignado</label>
+                        <select class="form-select" name="technician_id" required>
+                            <option value="">Seleccionar...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Situación Laboral</label>
                         <select class="form-select" name="job_status">
                             <option value="">Seleccionar...</option>
@@ -254,6 +260,24 @@
 {% block scripts %}
 {{ super() }}
 <script>
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load employers for technician dropdown
+    try {
+        const response = await fetch('/get_employers');
+        const employers = await response.json();
+        const technicianSelect = document.querySelector('select[name="technician_id"]');
+        
+        employers.forEach(employer => {
+            const option = document.createElement('option');
+            option.value = employer.id;
+            option.textContent = employer.azure_display_name;
+            technicianSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading employers:', error);
+    }
+});
+
 // User search functionality
 document.getElementById('userSearch').addEventListener('input', function(e) {
     const searchTerm = e.target.value.toLowerCase();
