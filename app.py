@@ -14,27 +14,52 @@ import hashlib
 import traceback
 import json
 import random
+import requests
 from datetime import datetime
 from werkzeug.utils import secure_filename
-import requests
+import base64
+
+# Custom filter for base64 encoding
+def b64encode_filter(data):
+    if data is None:
+        return ''
+    return base64.b64encode(data).decode('utf-8')
+
+# Custom ArrayType for SQLite
+class ArrayType(TypeDecorator):
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return None
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return []
 
 app = Flask(__name__)
+
+# Register the base64 filter
+app.jinja_env.filters['b64encode'] = b64encode_filter
 
 # Azure AD Configuration
 app.config.update({
     'SESSION_TYPE': 'filesystem',
-    'AZURE_CLIENT_ID': '',  # From Azure Portal registration
-    'AZURE_CLIENT_SECRET': '',  # From Azure Portal registration
-    'AZURE_TENANT_ID': '',  # From Azure Portal
-    'AZURE_AUTHORITY': 'https://login.microsoftonline.com/',
-    'AZURE_REDIRECT_PATH': '/getAToken',  # Redirect URI registered in Azure Portal
+    'AZURE_CLIENT_ID': '434df998-aa76-49b1-b92e-0f9a738e5b6c',
+    'AZURE_CLIENT_SECRET': 'YJe8Q~-Qfh_-ZeB3-O4VUulBgX-~fzJlsPBlwaYG',
+    'AZURE_TENANT_ID': 'f13127dc-6782-4765-bb5b-f47085a7ff8f',
+    'AZURE_AUTHORITY': 'https://login.microsoftonline.com/f13127dc-6782-4765-bb5b-f47085a7ff8f',
+    'AZURE_REDIRECT_PATH': '/getAToken',
     'SCOPE': [
         'https://graph.microsoft.com/User.Read',
         'https://graph.microsoft.com/User.Read.All',
         'https://graph.microsoft.com/email',
         'https://graph.microsoft.com/profile'
     ],
-    'ENDPOINT': 'https://graph.microsoft.com/v1.0/me'  # Microsoft Graph API endpoint
+    'ENDPOINT': 'https://graph.microsoft.com/v1.0/me'
 })
 
 # Other app configurations
@@ -45,8 +70,10 @@ app.config['UPLOAD_FOLDER'] = 'bin'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 Session(app)  # Initialize Flask-Session
+db = SQLAlchemy(app)
+socketio = SocketIO(app)
 
-# Helper functions for Azure AD
+# Helper functions for Azure AD and Graph API
 def load_cache():
     cache = msal.SerializableTokenCache()
     if session.get("token_cache"):
@@ -74,33 +101,71 @@ def get_token_from_cache(scope=None):
         save_cache(cca.token_cache)
         return result
 
+def get_user_profile_from_graph(access_token):
+    """Get user profile from Microsoft Graph using access token"""
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
+    }
+    response = requests.get(app.config['ENDPOINT'], headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    return None
+
+def get_user_photo_from_graph(access_token):
+    """Get user photo from Microsoft Graph using access token"""
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    photo_endpoint = 'https://graph.microsoft.com/v1.0/me/photo/$value'
+    response = requests.get(photo_endpoint, headers=headers)
+    if response.status_code == 200:
+        return response.content
+    return None
+
+def generate_tecnico_id(name, surname):
+    """Generate a unique tecnico ID based on name and surname"""
+    base = f"TEC_{name[0].upper()}{surname[0].upper()}"
+    random_num = random.randint(1000, 9999)
+    return f"{base}_{random_num}"
+
 # Decorator definition
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not session.get("user"):
-            return redirect(url_for("login"))
+            return redirect(url_for("show_login"))
         return f(*args, **kwargs)
     return decorated_function
 
 # Authentication routes
+@app.route("/")
+@login_required
+def index():
+    return render_template('index.html')
+
+@app.route("/login_page")
+def show_login():
+    if session.get("user"):
+        return redirect(url_for("index"))
+    return render_template("login.html")
+
 @app.route("/login")
 def login():
-    session["flow"] = build_msal_app().initiate_auth_code_flow(
+    # Generate state if not present
+    if not session.get("state"):
+        session["state"] = str(uuid.uuid4())
+    
+    # Generate and store auth flow
+    auth_flow = build_msal_app().initiate_auth_code_flow(
         app.config['SCOPE'],
         redirect_uri=url_for("authorized", _external=True)
     )
-    return redirect(session["flow"]["auth_uri"])
+    session["flow"] = auth_flow
+    
+    return redirect(auth_flow['auth_uri'])
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(
-        app.config['AZURE_AUTHORITY'] + "/oauth2/v2.0/logout" +
-        "?post_logout_redirect_uri=" + url_for("index", _external=True)
-    )
-
-@app.route(app.config['AZURE_REDIRECT_PATH'])
+@app.route("/getAToken")
 def authorized():
     try:
         cache = load_cache()
@@ -115,15 +180,65 @@ def authorized():
             return render_template("auth_error.html", result=result)
 
         session["user"] = result.get("id_token_claims")
+        
+        # Get user profile from Microsoft Graph
+        graph_data = get_user_profile_from_graph(result['access_token'])
+        if not graph_data:
+            return render_template("auth_error.html", result={"error": "Failed to get user profile from Graph API"})
+        
+        # Check if tecnico exists
+        tecnico = Tecnico.query.filter_by(azure_id=session["user"]["oid"]).first()
+        
+        if not tecnico:
+            # Get name and surname with fallbacks
+            name = graph_data.get('givenName')
+            surname = graph_data.get('surname')
+            
+            # If name or surname is missing, try to extract from displayName
+            if not name or not surname:
+                display_name = graph_data.get('displayName', '')
+                name_parts = display_name.split()
+                if len(name_parts) >= 2:
+                    name = name or name_parts[0]
+                    surname = surname or name_parts[-1]
+                else:
+                    # Last resort fallback
+                    name = name or display_name or 'User'
+                    surname = surname or 'Unknown'
+            
+            tecnico_id = generate_tecnico_id(name, surname)
+            
+            # Get user photo
+            photo = get_user_photo_from_graph(result['access_token'])
+            
+            # Create new tecnico
+            tecnico = Tecnico(
+                id=tecnico_id,
+                name=name,
+                last_name=surname,
+                entity_email=graph_data.get('mail'),
+                azure_id=session["user"]["oid"],
+                azure_email=graph_data.get('mail'),
+                azure_display_name=graph_data.get('displayName'),
+                picture=photo,
+                active=True,
+                last_update=datetime.utcnow()
+            )
+            db.session.add(tecnico)
+            db.session.commit()
+        
+        # Update last login
+        tecnico.last_login = datetime.utcnow()
+        db.session.commit()
+        
         return redirect(url_for("index"))
     except ValueError:
         return redirect(url_for("login"))
 
-# Protected routes
-@app.route('/')
-@login_required
-def index():
-    return render_template('index.html')
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("show_login"))
 
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
@@ -206,23 +321,6 @@ def save_project_file(file, project_dir):
             raise
     return None, None
 
-db = SQLAlchemy(app)
-socketio = SocketIO(app)
-
-# Custom Array Type for SQLAlchemy
-class ArrayType(TypeDecorator):
-    impl = Text
-    
-    def process_bind_param(self, value, dialect):
-        if value is not None:
-            return json.dumps(value)
-        return None
-        
-    def process_result_value(self, value, dialect):
-        if value is not None:
-            return json.loads(value)
-        return []
-
 # ===============================
 # Models (Existing and New)
 # ===============================
@@ -230,10 +328,26 @@ class ArrayType(TypeDecorator):
 # --- Original Models ---
 
 class Tecnico(db.Model):
-    id = db.Column(db.String(50), primary_key=True, default=lambda: f"TEC_{random.randint(1000, 9999)}")
-    nombre = db.Column(db.String(50), unique=True, nullable=False)
-    area = db.Column(db.String(50), nullable=False)
-    inserciones = db.Column(db.Integer, default=0)
+    __tablename__ = 'tecnicos'  # Changed from 'employers'
+    id = db.Column(db.String(50), primary_key=True)  # Will be generated as first_letter + surname + random
+    name = db.Column(db.String)
+    last_name = db.Column(db.String)
+    second_last_name = db.Column(db.String)
+    phone_number = db.Column(db.String(20))
+    mobile_number = db.Column(db.String(20))
+    personal_email = db.Column(db.String)
+    entity_email = db.Column(db.String)
+    address_id = db.Column(db.String(50), db.ForeignKey('address.address_id'))
+    username = db.Column(db.String)
+    password = db.Column(db.String)
+    picture = db.Column(db.LargeBinary)
+    active = db.Column(db.Boolean, default=True)
+    last_update = db.Column(db.DateTime, default=datetime.utcnow)
+    department_id = db.Column(db.String(50), db.ForeignKey('departments.department_id'))
+    azure_id = db.Column(db.String(100), unique=True)
+    azure_email = db.Column(db.String(255))
+    azure_display_name = db.Column(db.String(255))
+    last_login = db.Column(db.DateTime)
 
 class User(db.Model):
     __tablename__ = 'legacy_users'
@@ -295,46 +409,19 @@ def after_user_insert(mapper, connection, target):
         
         # First check if the tecnico exists using raw SQL with proper parameter binding
         result = connection.execute(
-            text("SELECT id, inserciones FROM tecnico WHERE nombre = :nombre"),
+            text("SELECT id FROM tecnicos WHERE name = :nombre"),
             {"nombre": target.entidad_asignada}
         ).first()
         
         if not result:
-            print(f"Error: No tecnico found with nombre={target.entidad_asignada}")
+            print(f"Error: No tecnico found with name={target.entidad_asignada}")
             return
             
-        # Update inserciones count using raw SQL with proper parameter binding
-        connection.execute(
-            text("UPDATE tecnico SET inserciones = :new_count WHERE id = :id"),
-            {"new_count": result.inserciones + 1, "id": result.id}
-        )
     except Exception as e:
-        print(f"Error updating inserciones: {str(e)}")
+        print(f"Error updating tecnico assignments: {str(e)}")
         traceback.print_exc()
 
 # --- New Models (New Schema) ---
-
-class Employer(db.Model):
-    __tablename__ = 'employers'
-    employer_id = db.Column(db.String(50), primary_key=True, default=lambda: f"EMP_{random.randint(1000000000, 9999999999)}")
-    name = db.Column(db.String)
-    last_name = db.Column(db.String)
-    second_last_name = db.Column(db.String)
-    phone_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
-    mobile_number = db.Column(db.String(20))  # Changed to String to handle longer phone numbers
-    personal_email = db.Column(db.String)
-    entity_email = db.Column(db.String)
-    address_id = db.Column(db.String(50), db.ForeignKey('address.address_id'))
-    username = db.Column(db.String)
-    password = db.Column(db.String)
-    picture = db.Column(db.LargeBinary)
-    active = db.Column(db.Boolean, default=True)
-    last_update = db.Column(db.DateTime, default=datetime.utcnow)
-    department_id = db.Column(db.String(50), db.ForeignKey('departments.department_id'))
-    azure_id = db.Column(db.String(100), unique=True)  # Azure AD Object ID
-    azure_email = db.Column(db.String(255))  # Azure AD Email
-    azure_display_name = db.Column(db.String(255))  # Azure AD Display Name
-    last_login = db.Column(db.DateTime)  # Track last login
 
 class Address(db.Model):
     __tablename__ = 'address'
@@ -455,20 +542,25 @@ class Itinerario(db.Model):
     insercion_date2 = db.Column(db.Date, nullable=True)
     contract_type2 = db.Column(db.String(50), nullable=True)
     workday_percent2 = db.Column(db.Float, nullable=True)
+    technician_id = db.Column(db.String(50), db.ForeignKey('tecnicos.id'), nullable=True)
 
     # Relationship with User model
     user = db.relationship('User', backref=db.backref('itinerario', lazy=True))
+    # Add relationship with Tecnico model
+    technician = db.relationship('Tecnico', backref=db.backref('itinerarios', lazy=True))
 
 # ===============================
 # Routes (Template Views)
 # ===============================
 
 @app.route('/projects')
+@login_required
 def projects():
     projects = Project.query.all()
     return render_template('projects.html', projects=projects)
 
 @app.route('/project/<project_id>')
+@login_required
 def project_detail(project_id):
     project = Project.query.get_or_404(project_id)
     
@@ -489,10 +581,12 @@ def project_detail(project_id):
                          available_users=available_users)
 
 @app.route('/add_users_to_project', methods=['POST'])
+@login_required
 def add_users_to_project():
     try:
         project_id = request.form.get('project_id')
         selected_users = json.loads(request.form.get('users', '[]'))
+        technician_id = request.form.get('technician_id')
         
         if not project_id or not selected_users:
             return jsonify({"error": "Missing required data"}), 400
@@ -515,6 +609,7 @@ def add_users_to_project():
                 priority_sector=request.form.get('priority_sector'),
                 priority_sector2=request.form.get('priority_sector2'),
                 education=request.form.get('education'),
+                technician_id=technician_id,
                 insercion_date=datetime.strptime(request.form.get('insercion_date'), '%Y-%m-%d').date() if request.form.get('insercion_date') else None,
                 contract_type=request.form.get('contract_type'),
                 workday_percent=float(request.form.get('workday_percent')) if request.form.get('workday_percent') else None,
@@ -555,6 +650,7 @@ def add_users_to_project():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/get_user_profile/<user_id>')
+@login_required
 def get_user_profile(user_id):
     user = Itinerario.query.get_or_404(user_id)
     return jsonify({
@@ -563,6 +659,7 @@ def get_user_profile(user_id):
     })
 
 @app.route('/add_user_itinerario/<user_id>', methods=['POST'])
+@login_required
 def add_user_itinerario(user_id):
     try:
         # Get the user
@@ -597,20 +694,23 @@ def add_user_itinerario(user_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/edit_user/<user_id>')
+@login_required
 def edit_user(user_id):
     user = User.query.filter_by(dni_nie=user_id).first_or_404()
     return render_template('edit_user.html', user=user)
 
 @app.route('/user_profile/<user_id>')
+@login_required
 def user_profile(user_id):
     user = User.query.filter_by(dni_nie=user_id).first_or_404()
-    itinerario = Itinerario.query.get(user_id)
+    itinerario = db.session.get(Itinerario, user_id)
     return render_template('user_profile.html', 
                          user=user, 
                          itinerario=itinerario,
                          Project=Project)  # Pass the Project model to the template
 
 @app.route('/update_user_itinerario/<user_id>', methods=['POST'])
+@login_required
 def update_user_itinerario(user_id):
     try:
         user = Itinerario.query.get_or_404(user_id)
@@ -653,10 +753,12 @@ def update_user_itinerario(user_id):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/new_project')
+@login_required
 def new_project():
     return render_template('new_project.html')
 
 @app.route('/add_project', methods=['POST'])
+@login_required
 def add_project():
     try:
         # Generate project ID (PROY_XXXX)
@@ -699,10 +801,12 @@ def add_project():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/usuarios')
+@login_required
 def usuarios():
     return render_template('usuarios.html')
 
 @app.route('/tecnicos')
+@login_required
 def tecnicos():
     return render_template('tecnicos.html')
 
@@ -712,26 +816,32 @@ def employers():
     return render_template('employers.html')
 
 @app.route('/addresses')
+@login_required
 def addresses():
     return render_template('addresses.html')
 
 @app.route('/cities')
+@login_required
 def cities():
     return render_template('cities.html')
 
 @app.route('/provinces')
+@login_required
 def provinces():
     return render_template('provinces.html')
 
 @app.route('/entities')
+@login_required
 def entities():
     return render_template('entities.html')
 
 @app.route('/departments')
+@login_required
 def departments():
     return render_template('departments.html')
 
 @app.route('/new_users')
+@login_required
 def new_users():
     # Ensure we have at least one record in each required table for testing
     try:
@@ -774,649 +884,165 @@ def new_users():
     return render_template('new_users.html')
 
 @app.route('/id_docs')
+@login_required
 def id_docs():
     return render_template('id_docs.html')
 
 @app.route('/social_groups')
+@login_required
 def social_groups():
-    return render_template('social_groups.html')
-
-@app.route('/user_info')
-def user_info():
-    return render_template('user_info.html')
-
-# ===============================
-# AJAX Endpoints for Data Operations
-# ===============================
-
-# --- Original Users ---
-@app.route('/add_user', methods=['POST'])
-def add_user():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        dni_validation, dni_error = validate_dni_nie(data.get('dni_nie', ''))
-        if not dni_validation:
-            return jsonify({"error": dni_error}), 400
-
-        dni_normalized = data['dni_nie'].upper()
-        if User.query.filter_by(dni_nie=dni_normalized).first():
-            return jsonify({"error": "DNI/NIE ya existe en la base de datos"}), 400
-
-        required_fields = ['nombre', 'apellido1', 'telefono', 'colectivo', 'acciones', 'entidad_asignada', 'acceso_programa']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": f"Campo requerido faltante: {field}"}), 400
-
-        validations = {
-            'colectivo': ["Desemplead@", "Discapacidad", "Mayores", "Exclusión", "Inmigrantes", "Jóvenes sin experiencia laboral", "Mayores de 45"],
-            'acciones': ["Espera", "Citada", "Atendida", "No interesa", "Ocupada", "No acude", "Derivada", "No contesta"],
-            'entidad_asignada': ["Prodiversa", "Mitad del cielo", "Acompanya", "Forprocer"],
-            'acceso_programa': ["Sí", "No"]
-        }
-
-        for field, allowed in validations.items():
-            if data[field] not in allowed:
-                return jsonify({"error": f"Valor inválido para {field}"}), 400
-
-        if data.get('incidencia') and data['incidencia'] not in ["Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE"]:
-            return jsonify({"error": "Valor de incidencia inválido"}), 400
-
-        new_user = User(
-            dni_nie=dni_normalized,
-            gesprodi=data.get('gesprodi'),
-            nombre=data['nombre'],
-            apellido1=data['apellido1'],
-            apellido2=data.get('apellido2'),
-            telefono=data['telefono'],
-            colectivo=data['colectivo'],
-            acciones=data['acciones'],
-            incidencia=data.get('incidencia') or None,
-            entidad_asignada=data['entidad_asignada'],
-            acceso_programa=data['acceso_programa'],
-            observaciones=data.get('observaciones')
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new user added'})
-        return jsonify(success=True)
-    except IntegrityError as e:
-        db.session.rollback()
-        if "dni_nie" in str(e).lower():
-            return jsonify({"error": "DNI/NIE ya existe en la base de datos"}), 400
-        return jsonify({"error": "Error de integridad de datos"}), 400
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error in add_new_user: {str(e)}")  # Debug log
-        import traceback
-        traceback.print_exc()  # Print full stack trace
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/update_user', methods=['POST'])
-def update_user():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        
-        # Find user by DNI/NIE
-        user = User.query.filter_by(dni_nie=data['dni_nie']).first()
-        if not user:
-            return jsonify({"error": "Usuario no encontrado"}), 404
-
-        # Update user fields
-        user.nombre = data['nombre']
-        user.apellido1 = data['apellido1']
-        user.apellido2 = data.get('apellido2')
-        user.telefono = data['telefono']
-        user.colectivo = data['colectivo']
-        user.acciones = data['acciones']
-        user.incidencia = data.get('incidencia')
-        user.entidad_asignada = data['entidad_asignada']
-        user.acceso_programa = data['acceso_programa']
-        user.observaciones = data.get('observaciones')
-
-        # Also update the UserNew record if it exists
-        user_new = UserNew.query.filter_by(doc_number=data['dni_nie']).first()
-        if user_new:
-            user_new.name = data['nombre']
-            user_new.last_name = data['apellido1']
-            user_new.second_last_name = data.get('apellido2')
-            user_new.phone_number = data['telefono']
-            user_new.actions = data['acciones']
-            user_new.incident = data.get('incidencia')
-
-        db.session.commit()
-        socketio.emit('update', {'message': 'user updated'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_users')
-def get_users():
-    users = User.query.all()
-    return jsonify([{
-        'dni_nie': user.dni_nie,
-        'nombre': user.nombre,
-        'apellido1': user.apellido1,
-        'apellido2': user.apellido2,
-        'telefono': user.telefono,
-        'colectivo': user.colectivo,
-        'acciones': user.acciones,
-        'incidencia': user.incidencia,
-        'entidad_asignada': user.entidad_asignada,
-        'acceso_programa': user.acceso_programa,
-        'observaciones': user.observaciones,
-        'sex': user.sex,
-        'birth_date': user.birth_date.strftime('%Y-%m-%d') if user.birth_date else None,
-        'projects': user.projects if user.projects else [],
-        'files': user.files if user.files else []
-    } for user in users])
-
-# --- Tecnicos ---
-@app.route('/add_tecnico', methods=['POST'])
-def add_tecnico():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_tecnico = Tecnico(
-            id=f"TEC_{data['nombre'][:2].upper()}_{random.randint(1000, 9999)}",
-            nombre=data['nombre'],
-            area=data['area']
-        )
-        db.session.add(new_tecnico)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new tecnico added'})
-        return jsonify(success=True)
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({"error": "El nombre de la entidad debe ser único"}), 400
-    except Exception as e:
-        db.session.rollback()
-        print(f"Error in add_new_user: {str(e)}")  # Debug log
-        import traceback
-        traceback.print_exc()  # Print full stack trace
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_tecnicos')
-def get_tecnicos():
-    tecnicos = Tecnico.query.all()
-    return jsonify([{
-        'id': t.id,
-        'nombre': t.nombre,
-        'area': t.area,
-        'inserciones': t.inserciones
-    } for t in tecnicos])
-
-# --- Employers ---
-@app.route('/add_employer', methods=['POST'])
-def add_employer():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_employer = Employer(
-            employer_id=data.get('employer_id'),
-            name=data.get('name'),
-            last_name=data.get('last_name'),
-            second_last_name=data.get('second_last_name'),
-            phone_number=data.get('phone_number'),
-            mobile_number=data.get('mobile_number'),
-            personal_email=data.get('personal_email'),
-            entity_email=data.get('entity_email'),
-            address_id=data.get('address_id'),
-            username=data.get('username'),
-            password=data.get('password'),
-            picture=data.get('picture'),
-            active=data.get('active', True),
-            last_update=data.get('last_update'),
-            department_id=data.get('department_id'),
-            azure_id=data.get('azure_id'),
-            azure_email=data.get('azure_email'),
-            azure_display_name=data.get('azure_display_name'),
-            last_login=data.get('last_login')
-        )
-        db.session.add(new_employer)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new employer added'})
-        return jsonify(success=True)
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({"error": "Integrity error in employer"}), 400
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_employers')
-def get_employers():
-    employers = Employer.query.all()
-    return jsonify([{
-        'id': emp.employer_id,
-        'name': f"{emp.name} {emp.last_name}"
-    } for emp in employers])
-
-
-@app.route('/get_social_groups_list')
-def get_social_groups_list():
-    groups = SocialGroup.query.all()
-    return jsonify([{
-        'id': g.social_group_id,
-        'name': g.group_name
-    } for g in groups])
-
-@app.route('/get_entities_list')
-def get_entities_list():
-    entities = Entity.query.all()
-    return jsonify([{
-        'id': e.entity_id,
-        'name': e.name
-    } for e in entities])
-
-# --- Addresses ---
-@app.route('/add_address', methods=['POST'])
-def add_address():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_address = Address(
-            address_id=data.get('address_id'),
-            address=data.get('address'),
-            address2=data.get('address2'),
-            postal_code=data.get('postal_code'),
-            city_id=data.get('city_id')
-        )
-        db.session.add(new_address)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new address added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_addresses')
-def get_addresses():
-    addresses = Address.query.all()
-    return jsonify([{
-        'address_id': addr.address_id,
-        'address': addr.address,
-        'address2': addr.address2,
-        'postal_code': addr.postal_code,
-        'city_id': addr.city_id
-    } for addr in addresses])
-
-# --- Cities ---
-@app.route('/add_city', methods=['POST'])
-def add_city():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_city = City(
-            city_id=data.get('city_id'),
-            city=data.get('city'),
-            province_id=data.get('province_id')
-        )
-        db.session.add(new_city)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new city added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_cities_list')
-def get_cities_list():
-    cities = City.query.all()
-    return jsonify([{
-        'id': c.city_id,
-        'name': c.city,
-        'province_id': c.province_id
-    } for c in cities])
-
-@app.route('/get_provinces_list')
-def get_provinces_list():
-    provinces = Province.query.all()
-    return jsonify([{
-        'id': p.province_id,
-        'name': p.province
-    } for p in provinces])
-
-# --- Provinces ---
-@app.route('/add_province', methods=['POST'])
-def add_province():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_province = Province(
-            province_id=data.get('province_id'),
-            province=data.get('province')
-        )
-        db.session.add(new_province)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new province added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_provinces')
-def get_provinces():
-    provinces = Province.query.all()
-    return jsonify([{
-        'province_id': p.province_id,
-        'province': p.province
-    } for p in provinces])
-
-# --- Entities ---
-@app.route('/add_entity', methods=['POST'])
-def add_entity():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_entity = Entity(
-            entity_id=data.get('entity_id'),
-            name=data.get('name')
-        )
-        db.session.add(new_entity)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new entity added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_entities')
-def get_entities():
-    entities = Entity.query.all()
-    return jsonify([{
-        'entity_id': e.entity_id,
-        'name': e.name
-    } for e in entities])
-
-# --- Departments ---
-@app.route('/add_department', methods=['POST'])
-def add_department():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_department = Department(
-            department_id=data.get('department_id'),
-            name=data.get('name'),
-            entity_id=data.get('entity_id')
-        )
-        db.session.add(new_department)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new department added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_departments')
-def get_departments():
-    departments = Department.query.all()
-    return jsonify([{
-        'department_id': d.department_id,
-        'name': d.name,
-        'entity_id': d.entity_id
-    } for d in departments])
-
-# --- New Users (UserNew) ---
-def generate_address_id():
-    import random
-    return f"ADDR_{random.randint(1000000000, 9999999999)}"
-
-@app.route('/add_new_user', methods=['POST'])
-def add_new_user():
-    try:
-        print("Form data:", request.form)  # Debug log
-        print("Files:", request.files)  # Debug log
-        
-        # Generate address ID and create address record
-        address_text = request.form.get('address')
-        postal_code = request.form.get('postal_code')
-        city_id = request.form.get('city_id')
-        
-        if address_text or postal_code or city_id:
-            address_id = generate_address_id()
-            new_address = Address(
-                address_id=address_id,
-                address=address_text,
-                postal_code=postal_code,
-                city_id=city_id
-            )
-            db.session.add(new_address)
-            db.session.commit()
-        else:
-            address_id = None
-
-        # Convert form data to appropriate types
-        doc_number = request.form.get('doc_number')
-        phone_number = request.form.get('phone_number')
-        mobile_number = request.form.get('mobile_number')
-        technician_id = request.form.get('technician_id')
-        social_group_id = request.form.get('social_group_id')
-        entity_id = request.form.get('entity_id')
-        
-        # Get incident value and handle it according to the model's constraints
-        incident = request.form.get('incident')
-        if incident == "Ninguna":
-            incident = None
-        
-        # Generate user_no
-        user_no = f"USR_{random.randint(1000, 9999)}"
-        
-        # Validate required IDs exist
-        doc_type_id = request.form.get('doc_type_id')
-        if not IdDoc.query.get(doc_type_id):
-            return jsonify({"error": "Invalid document type"}), 400
-
-        entity_id = request.form.get('entity_id')
-        if not Entity.query.get(entity_id):
-            return jsonify({"error": "Invalid entity"}), 400
-
-        if request.form.get('social_group_id'):
-            if not SocialGroup.query.get(request.form.get('social_group_id')):
-                return jsonify({"error": "Invalid social group"}), 400
-
-        if request.form.get('city_id'):
-            if not City.query.get(request.form.get('city_id')):
-                return jsonify({"error": "Invalid city"}), 400
-
-        # Create UserNew record
-        new_user = UserNew(
-            user_no=user_no,
-            doc_type_id=doc_type_id,
-            doc_number=doc_number,
-            name=request.form.get('name'),
-            last_name=request.form.get('last_name'),
-            second_last_name=request.form.get('second_last_name'),
-            phone_number=phone_number,
-            mobile_number=mobile_number,
-            email=request.form.get('email'),
-            technician_id=technician_id,
-            social_group_id=social_group_id,
-            address_id=address_id if address_id else None,
-            entity_id=entity_id,
-            create_date=datetime.utcnow(),
-            active=True,
-            actions=request.form.get('actions'),
-            incident=incident,
-            sex=request.form.get('sex'),
-            birth_date=datetime.strptime(request.form.get('birth_date'), '%Y-%m-%d').date() if request.form.get('birth_date') else None,
-            projects=[],
-            files=[]
-        )
-        db.session.add(new_user)
-        db.session.commit()
-
-        # Process and save files
-        file_hashes = {}
-        files_array = []  # Array to store file hashes
-        
-        print("Processing files...")  # Debug log
-        if 'dni_file' in request.files:
-            print("Processing DNI file...")  # Debug log
-            try:
-                file_hash, _ = save_user_file(request.files['dni_file'], new_user)
-                print(f"DNI file hash: {file_hash}")  # Debug log
-                if file_hash:
-                    file_hashes['doc_type_di'] = file_hash
-                    files_array.append(file_hash)
-            except Exception as e:
-                print(f"Error saving DNI file: {str(e)}")  # Debug log
-                traceback.print_exc()
-        
-        if 'cert_extr_file' in request.files:
-            print("Processing cert_extr file...")  # Debug log
-            try:
-                file_hash, _ = save_user_file(request.files['cert_extr_file'], new_user)
-                print(f"cert_extr file hash: {file_hash}")  # Debug log
-                if file_hash:
-                    file_hashes['cert_extr_id'] = file_hash
-                    files_array.append(file_hash)
-            except Exception as e:
-                print(f"Error saving cert_extr file: {str(e)}")  # Debug log
-                traceback.print_exc()
-        
-        if 'vida_laboral_file' in request.files:
-            print("Processing vida_laboral file...")  # Debug log
-            try:
-                file_hash, _ = save_user_file(request.files['vida_laboral_file'], new_user)
-                print(f"vida_laboral file hash: {file_hash}")  # Debug log
-                if file_hash:
-                    file_hashes['vida_laboral_id'] = file_hash
-                    files_array.append(file_hash)
-            except Exception as e:
-                print(f"Error saving vida_laboral file: {str(e)}")  # Debug log
-                traceback.print_exc()
-
-        # Update id_docs with file hashes if any files were uploaded
-        if file_hashes:
-            id_doc = IdDoc.query.get(new_user.doc_type_id)
-            if id_doc:
-                for field, hash_value in file_hashes.items():
-                    setattr(id_doc, field, hash_value)
-                db.session.commit()
-
-        # Update the files array in UserNew
-        new_user.files = files_array
-        db.session.commit()
-
-        # Also create a record in the legacy User table
-        legacy_user = User(
-            dni_nie=new_user.doc_number,
-            nombre=new_user.name,
-            apellido1=new_user.last_name,
-            apellido2=new_user.second_last_name,
-            telefono=new_user.phone_number,
-            # Map values from new user form
-            colectivo="Desemplead@",
-            acciones=new_user.actions,
-            incidencia=new_user.incident,
-            entidad_asignada="Prodiversa",
-            acceso_programa="Sí",
-            sex=request.form.get('sex'),
-            birth_date=datetime.strptime(request.form.get('birth_date'), '%Y-%m-%d').date() if request.form.get('birth_date') else None,
-            projects=request.form.getlist('projects[]') if request.form.getlist('projects[]') else [],
-            files=list(file_hashes.values()) if file_hashes else []
-        )
-
-        # Validate incidencia for legacy_user
-        valid_incidencia_values = ["Ninguna", "Error de conexión", "No hay información", "Baja administrativa", "Participante con otra entidad", "Error NIE"]
-        if legacy_user.incidencia not in valid_incidencia_values and legacy_user.incidencia is not None:
-            return jsonify({"error": "Valor de incidencia inválido para legacy_user"}), 400
-
-        db.session.add(legacy_user)
-        db.session.commit()
-
-        # Emit separate events for each table update
-        socketio.emit('update', {'message': 'new user added', 'table': 'new_users'})
-        socketio.emit('update', {'message': 'new user added', 'table': 'users'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_new_users')
-def get_new_users():
-    # Join with Entity to get entity name
-    users_new = db.session.query(UserNew, Entity.name.label('entity_name'))\
-        .outerjoin(Entity, UserNew.entity_id == Entity.entity_id)\
-        .all()
-    
-    return jsonify([{
-        'name': u[0].name,
-        'last_name': u[0].last_name,
-        'create_date': u[0].create_date,
-        'entity': u[1] if u[1] else ''  # Use entity name from join
-    } for u in users_new])
-
-# --- ID Docs ---
-@app.route('/add_id_doc', methods=['POST'])
-def add_id_doc():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_id_doc = IdDoc(
-            doc_type_id=data.get('doc_type_id'),
-            doc_name=data.get('doc_name'),
-            doc_template=data.get('doc_template')
-        )
-        db.session.add(new_id_doc)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new id_doc added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_id_docs')
-def get_id_docs():
-    docs = IdDoc.query.all()
-    return jsonify([{
-        'doc_type_id': d.doc_type_id,
-        'doc_name': d.doc_name,
-        'doc_template': d.doc_template,
-        'doc_type_di': d.doc_type_di,
-        'cert_extr_id': d.cert_extr_id,
-        'vida_laboral_id': d.vida_laboral_id
-    } for d in docs])
-
-# --- Social Groups ---
-@app.route('/add_social_group', methods=['POST'])
-def add_social_group():
-    if not request.is_json:
-        return jsonify({"error": "Request must be JSON"}), 415
-    try:
-        data = request.get_json()
-        new_social_group = SocialGroup(
-            social_group_id=data.get('social_group_id'),
-            group_name=data.get('group_name')
-        )
-        db.session.add(new_social_group)
-        db.session.commit()
-        socketio.emit('update', {'message': 'new social group added'})
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/get_social_groups')
-def get_social_groups():
     groups = SocialGroup.query.all()
     return jsonify([{
         'social_group_id': g.social_group_id,
         'group_name': g.group_name
     } for g in groups])
+
+def generate_address_id():
+    """Generate a unique address ID"""
+    return f"ADDR_{random.randint(1000000000, 9999999999)}"
+
+@app.route("/tecnico_profile")
+@login_required
+def tecnico_profile():
+    # Get the current tecnico based on the Azure ID from the session
+    tecnico = Tecnico.query.filter_by(azure_id=session["user"]["oid"]).first_or_404()
+    return render_template('tecnico_profile.html', tecnico=tecnico)
+
+# New route to get assigned users for a technician
+@app.route('/get_assigned_users/<tecnico_id>')
+@login_required
+def get_assigned_users(tecnico_id):
+    try:
+        # Get the technician to get their name for legacy assignments
+        tecnico = db.session.get(Tecnico, tecnico_id)
+        if not tecnico:
+            return jsonify({"error": "Technician not found"}), 404
+
+        # Query legacy users that have this technician assigned by entity name
+        legacy_users = User.query.filter_by(entidad_asignada=tecnico.name).all()
+        
+        # Also get users from itinerario table with this technician by ID
+        itinerario_users = db.session.query(Itinerario)\
+            .filter_by(technician_id=tecnico_id)\
+            .all()
+        
+        # Combine both sets of users
+        user_list = []
+        
+        # Add legacy users
+        for user in legacy_users:
+            user_list.append({
+                'dni_nie': user.dni_nie,
+                'nombre': user.nombre,
+                'apellido1': user.apellido1,
+                'apellido2': user.apellido2,
+                'projects': user.projects or []
+            })
+        
+        # Add users from itinerario if not already in list
+        for itinerario in itinerario_users:
+            if not any(u['dni_nie'] == itinerario.dni for u in user_list):
+                user = db.session.get(User, itinerario.dni)
+                if user:
+                    user_list.append({
+                        'dni_nie': user.dni_nie,
+                        'nombre': user.nombre,
+                        'apellido1': user.apellido1,
+                        'apellido2': user.apellido2,
+                        'projects': user.projects or []
+                    })
+        
+        print(f"Found {len(user_list)} assigned users for technician {tecnico_id}")  # Debug log
+        return jsonify(user_list)
+    except Exception as e:
+        print(f"Error getting assigned users: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_users')
+@login_required
+def get_users():
+    try:
+        users = User.query.all()
+        user_list = [{
+            'dni_nie': user.dni_nie,
+            'nombre': user.nombre,
+            'apellido1': user.apellido1,
+            'apellido2': user.apellido2,
+            'telefono': user.telefono,
+            'colectivo': user.colectivo,
+            'acciones': user.acciones,
+            'incidencia': user.incidencia,
+            'entidad_asignada': user.entidad_asignada,
+            'acceso_programa': user.acceso_programa,
+            'observaciones': user.observaciones,
+            'sex': user.sex,
+            'birth_date': user.birth_date.strftime('%Y-%m-%d') if user.birth_date else None,
+            'projects': user.projects if user.projects else [],
+            'files': user.files if user.files else []
+        } for user in users]
+        return jsonify(user_list)
+    except Exception as e:
+        print(f"Error in get_users: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_cities_list')
+@login_required
+def get_cities_list():
+    try:
+        cities = City.query.all()
+        return jsonify([{
+            'id': c.city_id,
+            'name': c.city,
+            'province_id': c.province_id
+        } for c in cities])
+    except Exception as e:
+        print(f"Error getting cities: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_entities_list')
+@login_required
+def get_entities_list():
+    try:
+        entities = Entity.query.all()
+        return jsonify([{
+            'id': e.entity_id,
+            'name': e.name
+        } for e in entities])
+    except Exception as e:
+        print(f"Error getting entities: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_social_groups_list')
+@login_required
+def get_social_groups_list():
+    try:
+        groups = SocialGroup.query.all()
+        return jsonify([{
+            'id': g.social_group_id,
+            'name': g.group_name
+        } for g in groups])
+    except Exception as e:
+        print(f"Error getting social groups: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_id_docs')
+@login_required
+def get_id_docs():
+    try:
+        docs = IdDoc.query.all()
+        return jsonify([{
+            'doc_type_id': d.doc_type_id,
+            'doc_name': d.doc_name,
+            'doc_template': d.doc_template,
+            'doc_type_di': d.doc_type_di,
+            'cert_extr_id': d.cert_extr_id,
+            'vida_laboral_id': d.vida_laboral_id
+        } for d in docs])
+    except Exception as e:
+        print(f"Error getting ID docs: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 # --- Users Info ---
 @app.route('/add_user_info', methods=['POST'])
@@ -1446,6 +1072,7 @@ def get_user_info():
     } for info in infos])
 
 @app.route('/download_file/<file_hash>')
+@login_required
 def download_file(file_hash):
     # Search for the file in the bin directory and its subdirectories
     for root, dirs, files in os.walk(app.config['UPLOAD_FOLDER']):
@@ -1458,10 +1085,97 @@ def download_file(file_hash):
     return jsonify({"error": "File not found"}), 404
 
 @app.route('/edit_itinerario/<user_id>')
+@login_required
 def edit_itinerario(user_id):
     user = User.query.filter_by(dni_nie=user_id).first_or_404()
     itinerario = Itinerario.query.get_or_404(user_id)
     return render_template('edit_itinerario.html', user=user, itinerario=itinerario)
+
+@app.route('/add_new_user', methods=['POST'])
+@login_required  # Add login_required decorator
+def add_new_user():
+    try:
+        print("Received form data:", request.form)
+        print("Received files:", request.files)
+        
+        if not session.get("user"):
+            return jsonify({"error": "Session expired. Please login again."}), 401
+        
+        # Map social groups to colectivo values
+        social_group_to_colectivo = {
+            'Inactivo': 'Desemplead@',
+            'Discapacidad': 'Discapacidad',
+            'Mayores': 'Mayores',
+            'Exclusión': 'Exclusión',
+            'Inmigrante': 'Inmigrantes',
+            'Joven sin experiencia laboral': 'Jóvenes sin experiencia laboral',
+            'Mayores de 45': 'Mayores de 45'
+        }
+
+        # Get the social group name
+        social_group = None
+        if request.form.get('social_group_id'):
+            social_group = db.session.get(SocialGroup, request.form.get('social_group_id'))
+            
+        # Map to correct colectivo value or use default
+        colectivo = social_group_to_colectivo.get(
+            social_group.group_name if social_group else 'Inactivo',
+            'Desemplead@'  # Default value if mapping not found
+        )
+
+        # Validate required fields
+        required_fields = ['doc_number', 'name', 'last_name']
+        for field in required_fields:
+            if not request.form.get(field):
+                return jsonify({"error": f"Campo requerido faltante: {field}"}), 400
+
+        # Create legacy User record
+        legacy_user = User(
+            dni_nie=request.form.get('doc_number'),
+            nombre=request.form.get('name'),
+            apellido1=request.form.get('last_name'),
+            apellido2=request.form.get('second_last_name'),
+            telefono=request.form.get('phone_number') or request.form.get('mobile_number'),
+            colectivo=colectivo,  # Use mapped value
+            acciones=request.form.get('actions', 'Espera'),  # Default to 'Espera' if not provided
+            incidencia=request.form.get('incident'),
+            entidad_asignada=db.session.get(Entity, request.form.get('entity_id')).name if request.form.get('entity_id') else "Prodiversa",
+            acceso_programa="Sí",
+            sex=request.form.get('sex'),
+            birth_date=datetime.strptime(request.form.get('birth_date'), '%Y-%m-%d').date() if request.form.get('birth_date') else None,
+            projects=[],
+            files=[]
+        )
+
+        print(f"Created legacy user with colectivo: {legacy_user.colectivo}")  # Debug log
+
+        db.session.add(legacy_user)
+        db.session.commit()
+
+        socketio.emit('update', {'message': 'new user added', 'table': 'users'})
+        return jsonify({"success": True, "message": "Usuario creado exitosamente"})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error in add_new_user: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_tecnicos')
+@login_required
+def get_tecnicos():
+    try:
+        tecnicos = Tecnico.query.filter_by(active=True).all()
+        return jsonify([{
+            'id': tecnico.id,
+            'nombre': tecnico.name,
+            'last_name': tecnico.last_name,
+            'second_last_name': tecnico.second_last_name
+        } for tecnico in tecnicos])
+    except Exception as e:
+        print(f"Error getting tecnicos: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # ===============================
 # SocketIO Connection
@@ -1495,11 +1209,22 @@ if __name__ == '__main__':
                 db.session.commit()
             
             # Add tecnico if it doesn't exist
-            if not Tecnico.query.filter_by(nombre=name).first():
+            if not Tecnico.query.filter_by(name=name).first():
                 tecnico = Tecnico(
                     id=f"TEC_{name[:2].upper()}_{random.randint(1000, 9999)}",
-                    nombre=name,
-                    area=area
+                    name=name,
+                    last_name=name,
+                    second_last_name=name,
+                    phone_number=f"555-{random.randint(100, 999)}-{random.randint(1000, 9999)}",
+                    mobile_number=f"555-{random.randint(100, 999)}-{random.randint(1000, 9999)}",
+                    personal_email=f"{name.lower()}@example.com",
+                    entity_email=f"{name.lower()}@example.com",
+                    address_id=generate_address_id(),
+                    username=name.lower(),
+                    password=f"{name.lower()}_password123",
+                    picture=None,
+                    active=True,
+                    last_update=datetime.utcnow()
                 )
                 db.session.add(tecnico)
                 db.session.commit()
@@ -1520,9 +1245,53 @@ if __name__ == '__main__':
                 group = SocialGroup(social_group_id=group_id, group_name=group_name)
                 db.session.add(group)
         
+        # Add default document types if they don't exist
+        default_docs = [
+            {
+                'doc_type_id': 'DOC_DNI',
+                'doc_name': 'DNI',
+                'doc_template': 'D'
+            },
+            {
+                'doc_type_id': 'DOC_NIE',
+                'doc_name': 'NIE',
+                'doc_template': 'N'
+            },
+            {
+                'doc_type_id': 'DOC_PASAPORTE',
+                'doc_name': 'Pasaporte',
+                'doc_template': 'P'
+            }
+        ]
+        
+        for doc in default_docs:
+            if not IdDoc.query.filter_by(doc_type_id=doc['doc_type_id']).first():
+                new_doc = IdDoc(**doc)
+                try:
+                    db.session.add(new_doc)
+                    db.session.commit()
+                    print(f"Created document type: {doc['doc_name']}")
+                except Exception as e:
+                    print(f"Error adding document type {doc['doc_name']}: {str(e)}")
+                    db.session.rollback()
+        
         try:
             db.session.commit()
         except Exception as e:
             print(f"Error adding default data: {str(e)}")
             db.session.rollback()
-    socketio.run(app, host='localhost', port=5050)
+    # Add SSL context for HTTPS
+    ssl_context = (
+        'ssl/certificate.crt',  # Path relative to your app.py
+        'ssl/private.key'       # Path relative to your app.py
+    )
+
+    socketio.run(app, host='0.0.0.0', port=5050, ssl_context=ssl_context)
+
+# Add this after the app initialization but before the routes
+@app.context_processor
+def inject_tecnico():
+    if session.get("user"):
+        tecnico = Tecnico.query.filter_by(azure_id=session["user"]["oid"]).first()
+        return {'tecnico': tecnico}
+    return {'tecnico': None}

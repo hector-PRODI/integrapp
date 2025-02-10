@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Perfil de Técnico{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Perfil del Técnico</h5>
+                </div>
+                <div class="card-body text-center">
+                    {% if tecnico.picture %}
+                    <img src="data:image/jpeg;base64,{{ tecnico.picture|b64encode }}" class="img-fluid rounded-circle mb-3" alt="Profile Picture" style="max-width: 200px;">
+                    {% else %}
+                    <div class="bg-light rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center" style="width: 200px; height: 200px;">
+                        <i class="bi bi-person" style="font-size: 5rem;"></i>
+                    </div>
+                    {% endif %}
+                    <h4>{{ tecnico.name }} {{ tecnico.last_name }}</h4>
+                    <p class="text-muted">{{ tecnico.entity_email }}</p>
+                    
+                    <div class="mt-3">
+                        <h6>Información de Contacto</h6>
+                        <ul class="list-unstyled">
+                            {% if tecnico.phone_number %}
+                            <li><i class="bi bi-telephone"></i> {{ tecnico.phone_number }}</li>
+                            {% endif %}
+                            {% if tecnico.mobile_number %}
+                            <li><i class="bi bi-phone"></i> {{ tecnico.mobile_number }}</li>
+                            {% endif %}
+                            {% if tecnico.personal_email %}
+                            <li><i class="bi bi-envelope"></i> {{ tecnico.personal_email }}</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Usuarios Asignados</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="assignedUsersTable">
+                            <thead>
+                                <tr>
+                                    <th>DNI/NIE</th>
+                                    <th>Nombre</th>
+                                    <th>Apellidos</th>
+                                    <th>Proyectos</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Users will be loaded here dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        // Fetch assigned users
+        const response = await fetch(`/get_assigned_users/{{ tecnico.id }}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const users = await response.json();
+        
+        // Get the table body
+        const tableBody = document.querySelector('#assignedUsersTable tbody');
+        
+        // Clear existing rows
+        tableBody.innerHTML = '';
+        
+        // Add user rows
+        if (Array.isArray(users) && users.length > 0) {
+            users.forEach(user => {
+                const projectsDisplay = user.projects && user.projects.length > 0 
+                    ? user.projects.map(projectId => 
+                        `<a href="/project/${projectId}" class="badge bg-primary text-decoration-none">${projectId}</a>`
+                      ).join(' ')
+                    : '<span class="text-muted">Sin proyectos</span>';
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.dni_nie}</td>
+                    <td>${user.nombre}</td>
+                    <td>${user.apellido1} ${user.apellido2 || ''}</td>
+                    <td>${projectsDisplay}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a href="/user_profile/${user.dni_nie}" class="btn btn-sm btn-info">
+                                <i class="bi bi-person"></i> Ver perfil
+                            </a>
+                            <a href="/edit_itinerario/${user.dni_nie}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-pencil"></i> Editar
+                            </a>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        } else {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td colspan="5" class="text-center">
+                    <i class="bi bi-info-circle me-2"></i>No hay usuarios asignados actualmente
+                </td>
+            `;
+            tableBody.appendChild(row);
+        }
+    } catch (error) {
+        console.error('Error loading assigned users:', error);
+        const tableBody = document.querySelector('#assignedUsersTable tbody');
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Error al cargar los usuarios asignados: ${error.message}
+                </td>
+            </tr>
+        `;
+    }
+});
+</script>
+{% endblock %} 

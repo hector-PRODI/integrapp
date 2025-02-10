@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>{% block title %}IntegrApp{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
     .table-responsive { 
       overflow-x: auto;
@@ -35,59 +35,87 @@
       font-size: 0.8rem; /* Adjust font size as needed */
       padding: 0.5rem 0.75rem;
     }
+    /* New styles for profile section */
+    .profile-picture {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .profile-picture-placeholder {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #e9ecef;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+    }
   </style>
+  {% block styles %}{% endblock %}
 </head>
 <body class="bg-light">
-  <nav class="navbar navbar-expand-lg navbar-dark bg-danger shadow-sm">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
     <div class="container">
-      <!-- Changed brand text to "Gesprodi" -->
-      <a class="navbar-brand" href="/"><i class="bi bi-people-fill"></i> Gesprodi</a>
-      <!-- Navbar toggler with "Opciones" text -->
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span> Opciones
+      <a class="navbar-brand" href="/">IntegrApp</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="/">
-              <i class="bi bi-house-door"></i> Inicio
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/usuarios">
-              <i class="bi bi-person-lines-fill"></i> Usuarios
-            </a>
-          </li>
+        <ul class="navbar-nav me-auto">
           <li class="nav-item">
             <a class="nav-link" href="/projects">
               <i class="bi bi-folder"></i> Proyectos
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link btn btn-outline-light" href="/new_users">
-              <i class="bi bi-plus-circle"></i> + Nuev@ usuari@
+            <a class="nav-link" href="/usuarios">
+              <i class="bi bi-people"></i> Usuarios
             </a>
           </li>
         </ul>
+        {% if session.user %}
+        <div class="d-flex align-items-center">
+          <div class="dropdown">
+            <a class="nav-link dropdown-toggle text-white d-flex align-items-center" href="#" role="button" data-bs-toggle="dropdown">
+              {% if tecnico and tecnico.picture %}
+              <img src="data:image/jpeg;base64,{{ tecnico.picture|b64encode }}" alt="Profile" class="profile-picture me-2">
+              {% else %}
+              <div class="profile-picture-placeholder me-2">
+                <i class="bi bi-person-fill"></i>
+              </div>
+              {% endif %}
+              {{ session.user.name }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a class="dropdown-item" href="/tecnico_profile">
+                  <i class="bi bi-person"></i> Mi Perfil
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item" href="/logout">
+                  <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </nav>
 
   <main class="container py-4">
-    {% if session.get("user") %}
-      <span>{{ session["user"]["name"] }}</span>
-      <a href="{{ url_for('logout') }}">Logout</a>
-    {% else %}
-      <a href="{{ url_for('login') }}">Login</a>
-    {% endif %}
     {% block content %}{% endblock %}
   </main>
 
   {% block scripts %}
   <!-- Base scripts -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
   {% endblock %}
 </body>

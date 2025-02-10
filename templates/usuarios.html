@@ -2,178 +2,108 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>Usuarios</h2>
-        <a href="/new_users" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Nuev@ usuari@
-        </a>
-    </div>
-
-    <!-- Search and Filter Controls -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input type="text" class="form-control" id="searchInput" placeholder="Buscar por nombre o DNI...">
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Usuarios</h4>
+            <a href="/new_users" class="btn btn-light">
+                <i class="bi bi-plus"></i> Nuevo Usuario
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>DNI/NIE</th>
+                            <th>Nombre</th>
+                            <th>Apellidos</th>
+                            <th>Teléfono</th>
+                            <th>Colectivo</th>
+                            <th>Acciones</th>
+                            <th>Entidad</th>
+                            <th>Proyectos</th>
+                            <th>Opciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <div class="col-md-4">
-            <select class="form-select" id="filterField">
-                <option value="">Filtrar por...</option>
-                <option value="colectivo">Colectivo</option>
-                <option value="acciones">Acciones</option>
-                <option value="entidad">Entidad</option>
-            </select>
-        </div>
-        <div class="col-md-4">
-            <input type="text" class="form-control" id="filterValue" placeholder="Valor del filtro...">
-        </div>
-    </div>
-
-    <!-- Users Table -->
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th>DNI/NIE</th>
-                    <th>Nombre</th>
-                    <th>Apellidos</th>
-                    <th>Teléfono</th>
-                    <th>Colectivo</th>
-                    <th>Acciones</th>
-                    <th>Entidad</th>
-                    <th>Estado</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody id="usersTableBody">
-                <!-- Table content will be populated by JavaScript -->
-            </tbody>
-        </table>
     </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const filterField = document.getElementById('filterField');
-    const filterValue = document.getElementById('filterValue');
-    const tableBody = document.getElementById('usersTableBody');
-
-    // Load users on page load
-    loadUsers();
-
-    // Add event listeners for search and filter
-    searchInput.addEventListener('input', filterUsers);
-    filterField.addEventListener('change', filterUsers);
-    filterValue.addEventListener('input', filterUsers);
-
-    // Socket.io connection for real-time updates
     const socket = io();
-    socket.on('update', function(data) {
-        if (data.message === 'new user added' || data.message === 'user updated') {
-            loadUsers();
+    
+    async function getProjectName(projectId) {
+        try {
+            const response = await fetch(`/project/${projectId}`);
+            const data = await response.json();
+            return data.name;
+        } catch (error) {
+            console.error('Error fetching project name:', error);
+            return projectId;
         }
-    });
-
-    // Function to load users
+    }
+    
     async function loadUsers() {
         try {
             const response = await fetch('/get_users');
             const users = await response.json();
-            displayUsers(users);
+            console.log('Retrieved users:', users);  // Debug log
+            const tbody = document.querySelector('#usersTable tbody');
+            tbody.innerHTML = '';
+            
+            for (const user of users) {
+                const tr = document.createElement('tr');
+                
+                // Format projects as a comma-separated list
+                let projectsHtml = 'No asignado';
+                if (user.projects && user.projects.length > 0) {
+                    projectsHtml = user.projects.map(projectId => 
+                        `<a href="/project/${projectId}">${projectId}</a>`
+                    ).join(', ');
+                }
+                
+                tr.innerHTML = `
+                    <td>${user.dni_nie}</td>
+                    <td>${user.nombre}</td>
+                    <td>${user.apellido1} ${user.apellido2 || ''}</td>
+                    <td>${user.telefono}</td>
+                    <td>${user.colectivo}</td>
+                    <td>${user.acciones}</td>
+                    <td>${user.entidad_asignada}</td>
+                    <td>${projectsHtml}</td>
+                    <td>
+                        <a href="/user_profile/${user.dni_nie}" class="btn btn-sm btn-info">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="/edit_user/${user.dni_nie}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
         } catch (error) {
             console.error('Error loading users:', error);
         }
     }
 
-    // Function to display users
-    function displayUsers(users) {
-        tableBody.innerHTML = '';
-        users.forEach(user => {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${user.dni_nie}</td>
-                <td>${user.nombre}</td>
-                <td>${user.apellido1} ${user.apellido2 || ''}</td>
-                <td>${user.telefono}</td>
-                <td>${user.colectivo}</td>
-                <td>${user.acciones}</td>
-                <td>${user.entidad_asignada}</td>
-                <td>
-                    <span class="badge ${getBadgeClass(user.acciones)}">
-                        ${user.acciones}
-                    </span>
-                </td>
-                <td>
-                    <a href="/user_profile/${user.dni_nie}" class="btn btn-sm btn-info">
-                        <i class="bi bi-eye"></i>
-                    </a>
-                </td>
-            `;
-            tableBody.appendChild(row);
-        });
-    }
+    // Load users initially
+    loadUsers();
 
-    // Function to filter users
-    function filterUsers() {
-        const searchText = searchInput.value.toLowerCase();
-        const field = filterField.value;
-        const value = filterValue.value.toLowerCase();
-
-        Array.from(tableBody.getElementsByTagName('tr')).forEach(row => {
-            const dni = row.cells[0].textContent.toLowerCase();
-            const name = row.cells[1].textContent.toLowerCase();
-            const surname = row.cells[2].textContent.toLowerCase();
-            const fieldValue = field ? getFieldValue(row, field).toLowerCase() : '';
-            
-            const matchesSearch = dni.includes(searchText) || 
-                                name.includes(searchText) || 
-                                surname.includes(searchText);
-            const matchesFilter = !field || fieldValue.includes(value);
-            
-            row.style.display = matchesSearch && matchesFilter ? '' : 'none';
-        });
-    }
-
-    // Helper function to get field value based on filter field
-    function getFieldValue(row, field) {
-        switch (field) {
-            case 'colectivo':
-                return row.cells[4].textContent;
-            case 'acciones':
-                return row.cells[5].textContent;
-            case 'entidad':
-                return row.cells[6].textContent;
-            default:
-                return '';
+    // Reload when socket receives update
+    socket.on('update', function(data) {
+        if (data.table === 'users' || !data.table) {
+            loadUsers();
         }
-    }
-
-    // Helper function to get badge class based on action
-    function getBadgeClass(action) {
-        switch (action) {
-            case 'Atendida':
-                return 'bg-success';
-            case 'Espera':
-                return 'bg-warning text-dark';
-            case 'Citada':
-                return 'bg-info';
-            case 'No interesa':
-            case 'No acude':
-                return 'bg-danger';
-            case 'Ocupada':
-                return 'bg-primary';
-            case 'Derivada':
-                return 'bg-secondary';
-            default:
-                return 'bg-light text-dark';
-        }
-    }
+    });
 });
 </script>
 {% endblock %}

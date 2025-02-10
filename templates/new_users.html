@@ -10,33 +10,46 @@
             <form id="newUserForm" enctype="multipart/form-data">
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <label class="form-label">DNI/NIE</label>
-                        <input type="text" class="form-control" name="doc_number" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" class="form-control" name="name" required>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Primer Apellido</label>
-                        <input type="text" class="form-control" name="last_name" required>
-                    </div>
-                </div>
-
-                <div class="row mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Tipo de Documento</label>
+                        <label class="form-label">Tipo de Documento *</label>
                         <select class="form-select" name="doc_type_id" required>
                             <option value="">Seleccionar...</option>
                         </select>
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label">Número de Documento *</label>
+                        <input type="text" class="form-control" name="doc_number" required 
+                               placeholder="Seleccione tipo de documento primero">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Nombre *</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Primer Apellido *</label>
+                        <input type="text" class="form-control" name="last_name" required>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">Segundo Apellido</label>
                         <input type="text" class="form-control" name="second_last_name">
                     </div>
+                </div>
+
+                <div class="row mb-3">
                     <div class="col-md-4">
                         <label class="form-label">Email</label>
                         <input type="email" class="form-control" name="email">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sexo</label>
+                        <select class="form-select" name="sex">
+                            <option value="">Seleccionar...</option>
+                            <option value="M">Masculino</option>
+                            <option value="F">Femenino</option>
+                            <option value="O">Otro</option>
+                        </select>
                     </div>
                 </div>
 
@@ -50,13 +63,8 @@
                         <input type="tel" class="form-control" name="mobile_number">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Sexo</label>
-                        <select class="form-select" name="sex">
-                            <option value="">Seleccionar...</option>
-                            <option value="M">Masculino</option>
-                            <option value="F">Femenino</option>
-                            <option value="O">Otro</option>
-                        </select>
+                        <label class="form-label">Fecha de Nacimiento</label>
+                        <input type="date" class="form-control" name="birth_date">
                     </div>
                 </div>
 
@@ -111,19 +119,6 @@
                             <option value="">Seleccionar...</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Fecha de Nacimiento</label>
-                        <input type="date" class="form-control" name="birth_date">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Sexo</label>
-                        <select class="form-select" name="sex">
-                            <option value="">Seleccionar...</option>
-                            <option value="M">Masculino</option>
-                            <option value="F">Femenino</option>
-                            <option value="O">Otro</option>
-                        </select>
-                    </div>
                 </div>
 
                 <div class="row mb-3">
@@ -162,21 +157,6 @@
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
     const form = document.getElementById('newUserForm');
-    
-    // Load document types
-    try {
-        const docTypesResponse = await fetch('/get_id_docs');
-        const docTypes = await docTypesResponse.json();
-        const docTypeSelect = form.elements['doc_type_id'];
-        docTypes.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.doc_type_id;
-            option.textContent = doc.doc_name;
-            docTypeSelect.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Error loading document types:', error);
-    }
 
     // Load cities
     try {
@@ -223,64 +203,76 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Error loading social groups:', error);
     }
 
+    // Load ID docs
+    try {
+        const docsResponse = await fetch('/get_id_docs');
+        const docs = await docsResponse.json();
+        const docSelect = form.elements['doc_type_id'];
+        docs.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.doc_type_id;
+            option.textContent = doc.doc_name;
+            docSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading ID docs:', error);
+    }
+
+    // Handle form submission
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
-
-        // Basic form validation
-        const requiredFields = ['doc_type_id', 'doc_number', 'name', 'last_name', 'actions', 'entity_id'];
-        for (const field of requiredFields) {
-            const input = form.elements[field];
-            if (!input.value.trim()) {
-                alert(`El campo ${input.labels[0].textContent.trim()} es obligatorio`);
-                input.focus();
-                return;
-            }
-        }
-
-        // DNI/NIE validation
-        const dni = form.elements['doc_number'].value;
-        if (!/^\d{8}[A-Za-z]$/.test(dni)) {
-            alert('El DNI/NIE debe tener 8 dígitos seguidos de una letra');
-            form.elements['doc_number'].focus();
-            return;
-        }
-
-        // Phone validation (if provided)
-        const phone = form.elements['phone_number'].value;
-        const mobile = form.elements['mobile_number'].value;
-        if (phone && !/^[0-9]{9}$/.test(phone)) {
-            alert('El teléfono fijo debe tener 9 dígitos');
-            form.elements['phone_number'].focus();
-            return;
-        }
-        if (mobile && !/^[0-9]{9}$/.test(mobile)) {
-            alert('El teléfono móvil debe tener 9 dígitos');
-            form.elements['mobile_number'].focus();
-            return;
-        }
-
+        
         try {
-            const formData = new FormData(this);
+            const formData = new FormData(form);
+            
             const response = await fetch('/add_new_user', {
                 method: 'POST',
                 body: formData
             });
-
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error al crear usuario');
             }
-
+            
             const result = await response.json();
+            
             if (result.success) {
+                alert('Usuario creado exitosamente');
                 window.location.href = '/usuarios';
             } else {
-                alert(result.error || 'Error al crear el usuario');
+                throw new Error(result.error || 'Error desconocido al crear usuario');
             }
+            
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al crear el usuario');
+            alert(error.message || 'Error al crear usuario. Por favor, inténtelo de nuevo.');
+        }
+    });
+
+    // Add document type validation
+    const docTypeSelect = form.elements['doc_type_id'];
+    const docNumber = form.elements['doc_number'];
+
+    docTypeSelect.addEventListener('change', function() {
+        const docType = this.value;
+        
+        // Update placeholder and pattern based on document type
+        if (docType === 'DOC_DNI') {
+            docNumber.placeholder = '12345678A';
+            docNumber.pattern = '^\\d{8}[A-Za-z]$';
+            docNumber.title = 'DNI debe tener 8 números seguidos de una letra';
+        } else if (docType === 'DOC_NIE') {
+            docNumber.placeholder = 'Y1234567Z';
+            docNumber.pattern = '^[XYZ]\\d{7}[A-Za-z]$';
+            docNumber.title = 'NIE debe empezar con X, Y o Z, seguido de 7 números y una letra';
+        } else if (docType === 'DOC_PASAPORTE') {
+            docNumber.placeholder = 'Número de pasaporte';
+            docNumber.pattern = '.+';
+            docNumber.title = 'Ingrese número de pasaporte';
         }
     });
 });
 </script>
 {% endblock %}
+

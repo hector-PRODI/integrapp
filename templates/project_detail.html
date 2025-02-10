@@ -69,6 +69,7 @@
                             <th>Apellidos</th>
                             <th>Estado Laboral</th>
                             <th>Sector Prioritario</th>
+                            <th>Técnico Asignado</th>
                             <th>CV</th>
                             <th>Acciones</th>
                         </tr>
@@ -81,6 +82,15 @@
                             <td>{{ user.last_name }} {{ user.second_last_name or '' }}</td>
                             <td>{{ user.job_status or 'No especificado' }}</td>
                             <td>{{ user.priority_sector or 'No especificado' }}</td>
+                            <td>
+                                {% if user.technician_id %}
+                                    <span class="technician-name" data-tecnico-id="{{ user.technician_id }}">
+                                        Cargando...
+                                    </span>
+                                {% else %}
+                                    No asignado
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if user.cv %}
                                 <a href="/download_file/{{ user.cv }}" class="btn btn-sm btn-primary">
@@ -96,7 +106,7 @@
                                         <i class="bi bi-pencil"></i> Editar
                                     </a>
                                     <a href="/user_profile/{{ user.dni }}" class="btn btn-sm btn-info">
-                                        <i class="bi bi-person"></i> Ver perfil de usuario
+                                        <i class="bi bi-person"></i> Ver perfil
                                     </a>
                                 </div>
                             </td>
@@ -261,20 +271,33 @@
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', async function() {
-    // Load employers for technician dropdown
+    // Load tecnicos for technician dropdown
     try {
-        const response = await fetch('/get_employers');
-        const employers = await response.json();
+        const response = await fetch('/get_tecnicos');
+        const tecnicos = await response.json();
         const technicianSelect = document.querySelector('select[name="technician_id"]');
         
-        employers.forEach(employer => {
+        // Create a map of tecnico IDs to names for easy lookup
+        const tecnicoMap = new Map(tecnicos.map(t => [
+            t.id, 
+            `${t.nombre} ${t.last_name} ${t.second_last_name || ''}`.trim()
+        ]));
+        
+        // Populate dropdown
+        tecnicos.forEach(tecnico => {
             const option = document.createElement('option');
-            option.value = employer.id;
-            option.textContent = employer.azure_display_name;
+            option.value = tecnico.id;
+            option.textContent = tecnicoMap.get(tecnico.id);
             technicianSelect.appendChild(option);
         });
+
+        // Update technician names in the table
+        document.querySelectorAll('.technician-name').forEach(span => {
+            const tecnicoId = span.dataset.tecnicoId;
+            span.textContent = tecnicoMap.get(tecnicoId) || 'No encontrado';
+        });
     } catch (error) {
-        console.error('Error loading employers:', error);
+        console.error('Error loading tecnicos:', error);
     }
 });
 
